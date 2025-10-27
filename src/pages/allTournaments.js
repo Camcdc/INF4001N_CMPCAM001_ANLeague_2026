@@ -8,7 +8,7 @@ import {
   Timestamp,
 } from "firebase/firestore";
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom"; // for navigation
+import { useNavigate } from "react-router-dom";
 import { db } from "../config/firebase";
 
 export const CreateTournaments = () => {
@@ -22,21 +22,47 @@ export const CreateTournaments = () => {
   const auth = getAuth();
   const navigate = useNavigate();
 
-  // Fetch tournaments
+  // Fetch tournaments from Firestore (with federationIDs for teams)
   const fetchTournaments = async () => {
     try {
       const snapshot = await getDocs(collection(db, "tournament"));
+      const tournaments = await Promise.all(
+        snapshot.docs.map(async (docSnap) => {
+          const data = docSnap.data();
+
+          // Fetch federationIDs for all teamsQualified
+          if (data.teamsQualified && data.teamsQualified.length > 0) {
+            const teams = await Promise.all(
+              data.teamsQualified.map(async (teamId) => {
+                const teamDoc = await getDoc(doc(db, "teams", teamId));
+                if (teamDoc.exists()) {
+                  return {
+                    id: teamId,
+                    federationID: teamDoc.data().federationID || "Unknown",
+                  };
+                } else {
+                  return { id: teamId, federationID: "Unknown" };
+                }
+              })
+            );
+            data.teamsQualified = teams; // Replace team IDs with objects containing federationIDs
+          } else {
+            data.teamsQualified = [];
+          }
+
+          return { id: docSnap.id, ...data };
+        })
+      );
+
       setExistingTournaments(
-        snapshot.docs
-          .map((doc) => ({ id: doc.id, ...doc.data() }))
-          .sort((a, b) => b.createdAt?.seconds - a.createdAt?.seconds)
+        tournaments.sort((a, b) => b.createdAt?.seconds - a.createdAt?.seconds)
       );
     } catch (err) {
       console.error("Error fetching tournaments:", err);
     }
   };
 
-  // Listen for auth state and check role
+  // Check the role of user
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
@@ -45,14 +71,14 @@ export const CreateTournaments = () => {
       } else {
         setAdmin(false);
       }
-      fetchTournaments();
+      await fetchTournaments();
       setCheckingAdmin(false);
     });
 
     return () => unsubscribe();
   }, []);
 
-  // Create tournament
+  // Create a new tournament
   const handleCreateTournament = async () => {
     if (!tournamentName.trim()) return alert("Enter a tournament name");
     if (!admin) return alert("Only admins can create tournaments");
@@ -102,7 +128,7 @@ export const CreateTournaments = () => {
         )}
       </div>
 
-      {/* Tournament Cards */}
+      {/* Tournaments */}
       {existingTournaments.length === 0 ? (
         <p className="text-gray-500">No tournaments found.</p>
       ) : (
@@ -118,19 +144,23 @@ export const CreateTournaments = () => {
                   {t.stage}
                 </span>
               </div>
+
               <p className="text-gray-600 mb-3">
                 Teams Registered: {t.teamsQualified?.length || 0}
               </p>
+
+              {/* Show federationIDs instead of team IDs */}
               <div className="flex gap-2 flex-wrap mb-4">
-                {t.teamsQualified?.map((teamId) => (
+                {t.teamsQualified?.map((team) => (
                   <span
-                    key={teamId}
+                    key={team.id}
                     className="text-sm bg-gray-100 text-gray-800 px-2 py-1 rounded-full"
                   >
-                    {teamId}
+                    {team.federationID}
                   </span>
                 ))}
               </div>
+
               <button
                 onClick={() => navigate(`/tournament/${t.id}`)}
                 className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 transition"
@@ -142,7 +172,7 @@ export const CreateTournaments = () => {
         </div>
       )}
 
-      {/* Create Tournament Modal */}
+      {/* Modal - Create Tournament */}
       {modalOpen && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white p-6 rounded shadow-lg w-96">

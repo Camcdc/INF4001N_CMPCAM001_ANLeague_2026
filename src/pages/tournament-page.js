@@ -1,4 +1,16 @@
-import { arrayUnion, doc, getDoc, updateDoc } from "firebase/firestore";
+import { onAuthStateChanged } from "firebase/auth";
+import {
+  addDoc,
+  arrayUnion,
+  collection,
+  deleteDoc,
+  doc,
+  getDoc,
+  getDocs,
+  query,
+  updateDoc,
+  where,
+} from "firebase/firestore";
 import { useEffect, useState } from "react";
 import { Bracket, Seed, SeedItem } from "react-brackets";
 import { Link, useNavigate, useParams } from "react-router-dom";
@@ -11,13 +23,18 @@ export const TournamentPage = () => {
   const [tournament, setTournament] = useState(null);
   const [loading, setLoading] = useState(true);
   const [teamsData, setTeamsData] = useState({});
+  const [matches, setMatches] = useState([]);
 
+  // Fetch data once auth is ready
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const authUser = auth.currentUser;
-        if (!authUser) return;
+    const unsubscribe = onAuthStateChanged(auth, async (authUser) => {
+      if (!authUser) {
+        navigate("/login");
+        return;
+      }
 
+      try {
+        // Fetch user
         const userDoc = await getDoc(doc(db, "users", authUser.uid));
         if (!userDoc.exists()) return;
         const userData = userDoc.data();
@@ -25,6 +42,7 @@ export const TournamentPage = () => {
 
         if (!userData.teamID) navigate("/register-team");
 
+        // Fetch tournament
         const tournamentDoc = await getDoc(doc(db, "tournament", id));
         if (!tournamentDoc.exists()) return;
         const tournamentData = {
@@ -33,46 +51,40 @@ export const TournamentPage = () => {
         };
         setTournament(tournamentData);
 
-        if (tournamentData.teamsQualified) {
-          const teamDataResults = await Promise.all(
+        // Fetch teams
+        if (tournamentData.teamsQualified?.length > 0) {
+          const teamDocs = await Promise.all(
             tournamentData.teamsQualified.map(async (teamId) => {
-              try {
-                const teamDoc = await getDoc(doc(db, "teams", teamId));
-                if (teamDoc.exists()) {
-                  const teamData = teamDoc.data();
-                  console.log(`Team ${teamId} data:`, teamData); // Debug log
-                  return { [teamId]: teamData };
-                } else {
-                  console.warn(`Team document not found for teamId: ${teamId}`);
-                  return null; // Don't include teams that don't exist
-                }
-              } catch (error) {
-                console.error(`Error fetching team ${teamId}:`, error);
-                return null;
-              }
+              const docSnap = await getDoc(doc(db, "teams", teamId));
+              return docSnap.exists() ? { [teamId]: docSnap.data() } : null;
             })
           );
-
-          // Filter out null results and merge the valid team data
-          const validTeamData = teamDataResults.filter(
-            (result) => result !== null
+          const validTeams = teamDocs.filter((t) => t !== null);
+          setTeamsData(
+            validTeams.reduce((acc, curr) => ({ ...acc, ...curr }), {})
           );
-          const teamsDataObject = validTeamData.reduce(
-            (acc, curr) => ({ ...acc, ...curr }),
-            {}
-          );
-          console.log("Final teamsData object:", teamsDataObject); // Debug log
-          setTeamsData(teamsDataObject);
         }
+
+        // Fetch matches for this tournament
+        const matchesQuery = query(
+          collection(db, "matches"),
+          where("tournamentID", "==", tournamentData.id)
+        );
+        const matchSnapshot = await getDocs(matchesQuery);
+        setMatches(
+          matchSnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }))
+        );
       } catch (err) {
         console.error(err);
       } finally {
         setLoading(false);
       }
-    };
-    fetchData();
+    });
+
+    return () => unsubscribe();
   }, [id, navigate]);
 
+  // Register user team
   const registerTeam = async (teamID) => {
     if (!teamID || !tournament) return;
     if (tournament.teamsQualified?.includes(teamID)) {
@@ -80,53 +92,20 @@ export const TournamentPage = () => {
       return;
     }
     try {
+      // Update tournament in Firestore
       const tournamentRef = doc(db, "tournament", id);
       await updateDoc(tournamentRef, { teamsQualified: arrayUnion(teamID) });
 
-      const updatedTeamsQualified = [
-        ...(tournament.teamsQualified || []),
-        teamID,
-      ];
+      // Fetch newly registered team data
+      const teamDoc = await getDoc(doc(db, "teams", teamID));
+      const teamData = teamDoc.exists() ? { [teamID]: teamDoc.data() } : {};
 
+      // Update local state immediately
       setTournament((prev) => ({
         ...prev,
-        teamsQualified: updatedTeamsQualified,
+        teamsQualified: [...(prev.teamsQualified || []), teamID],
       }));
-
-      // Refresh all teams data to ensure consistency
-      try {
-        const teamDataResults = await Promise.all(
-          updatedTeamsQualified.map(async (teamId) => {
-            try {
-              const teamDoc = await getDoc(doc(db, "teams", teamId));
-              if (teamDoc.exists()) {
-                const teamData = teamDoc.data();
-                console.log(`Refreshed team ${teamId} data:`, teamData);
-                return { [teamId]: teamData };
-              } else {
-                console.warn(`Team document not found for teamId: ${teamId}`);
-                return null;
-              }
-            } catch (error) {
-              console.error(`Error fetching team ${teamId}:`, error);
-              return null;
-            }
-          })
-        );
-
-        // Filter out null results and merge the valid team data
-        const validTeamData = teamDataResults.filter(
-          (result) => result !== null
-        );
-        const refreshedTeamsData = validTeamData.reduce(
-          (acc, curr) => ({ ...acc, ...curr }),
-          {}
-        );
-        console.log("Refreshed all teams data:", refreshedTeamsData);
-        setTeamsData(refreshedTeamsData);
-      } catch (teamError) {
-        console.error("Error refreshing teams data:", teamError);
-      }
+      setTeamsData((prev) => ({ ...prev, ...teamData }));
 
       alert("Team registered successfully!");
     } catch (err) {
@@ -134,56 +113,113 @@ export const TournamentPage = () => {
       alert("Failed to register team");
     }
   };
+  // Create a match
+  const createMatch = async (team1ID, team2ID, stage) => {
+    try {
+      const matchRef = await addDoc(collection(db, "matches"), {
+        commentary: [""],
+        date: new Date(),
+        score: { team1: 0, team2: 0 },
+        simulated: false,
+        stage,
+        status: "upcoming",
+        team1ID,
+        team2ID,
+        winnerID: "",
+        tournamentID: tournament.id,
+      });
+      setMatches((prev) => [
+        ...prev,
+        { id: matchRef.id, team1ID, team2ID, stage },
+      ]);
+      return matchRef.id;
+    } catch (err) {
+      console.error("Error creating match:", err);
+    }
+  };
 
+  // Start tournament
   const startTournament = async () => {
     if (!tournament || (tournament.teamsQualified || []).length !== 8) {
       alert("Tournament must have exactly 8 teams to start");
       return;
     }
 
-    try {
-      const teams = tournament.teamsQualified;
-      const quarterFinals = [
-        { matchId: "match1", teams: [teams[0], teams[7]] },
-        { matchId: "match2", teams: [teams[3], teams[4]] },
-        { matchId: "match3", teams: [teams[1], teams[6]] },
-        { matchId: "match4", teams: [teams[2], teams[5]] },
-      ];
+    const teams = tournament.teamsQualified;
 
-      const semiFinals = [
-        { matchId: "semi1", teams: ["Winner of match1", "Winner of match2"] },
-        { matchId: "semi2", teams: ["Winner of match3", "Winner of match4"] },
-      ];
+    // Quarter Finals
+    const quarterFinals = [
+      { teams: [teams[0], teams[7]], stage: "Quarter Finals" },
+      { teams: [teams[3], teams[4]], stage: "Quarter Finals" },
+      { teams: [teams[1], teams[6]], stage: "Quarter Finals" },
+      { teams: [teams[2], teams[5]], stage: "Quarter Finals" },
+    ];
 
-      const final = [
-        { matchId: "final", teams: ["Winner of semi1", "Winner of semi2"] },
-      ];
+    const semiFinals = [
+      { teams: ["TBD", "TBD"], stage: "Semi Finals" },
+      { teams: ["TBD", "TBD"], stage: "Semi Finals" },
+    ];
 
-      const bracket = { quarterFinals, semiFinals, final, champion: null };
+    const final = [{ teams: ["TBD", "TBD"], stage: "Final" }];
 
-      const tournamentRef = doc(db, "tournament", id);
-      await updateDoc(tournamentRef, { stage: "Quarter Finals", bracket });
-      setTournament((prev) => ({ ...prev, stage: "Quarter Finals", bracket }));
+    const winner = "TBD";
 
-      alert("Tournament started! Brackets have been seeded.");
-    } catch (err) {
-      console.error(err);
-      alert("Failed to start tournament");
+    const createdMatches = [];
+
+    // Create Quarter Final matches in Firestore
+    for (const qf of quarterFinals) {
+      const matchId = await createMatch(qf.teams[0], qf.teams[1], qf.stage);
+      createdMatches.push({ id: matchId, ...qf });
     }
+
+    // Update tournament document with bracket skeleton
+    await updateDoc(doc(db, "tournament", id), {
+      stage: "Quarter Finals",
+      bracket: {
+        quarterFinals,
+        semiFinals,
+        final,
+        champion: winner,
+      },
+    });
+
+    setTournament((prev) => ({
+      ...prev,
+      stage: "Quarter Finals",
+      bracket: {
+        quarterFinals,
+        semiFinals,
+        final,
+        champion: null,
+      },
+    }));
+
+    // Update local matches state
+    setMatches(createdMatches);
+
+    alert(
+      "Tournament started! Quarter Final matches created with bracket skeleton."
+    );
   };
 
+  // Reset tournament (delete matches only)
   const resetTournament = async () => {
-    if (!tournament) return;
-    if (
-      !window.confirm(
-        "Are you sure you want to reset the tournament? All progress will be lost."
-      )
-    )
-      return;
+    if (!window.confirm("Reset tournament? All progress will be lost.")) return;
 
     try {
-      const tournamentRef = doc(db, "tournament", id);
-      await updateDoc(tournamentRef, {
+      // Delete all matches for this tournament
+      const matchesQuery = query(
+        collection(db, "matches"),
+        where("tournamentID", "==", tournament.id)
+      );
+      const matchSnapshot = await getDocs(matchesQuery);
+      const deletePromises = matchSnapshot.docs.map((docSnap) =>
+        deleteDoc(doc(db, "matches", docSnap.id))
+      );
+      await Promise.all(deletePromises);
+
+      // Reset tournament stage and bracket
+      await updateDoc(doc(db, "tournament", id), {
         stage: "Registration",
         bracket: {
           quarterFinals: [],
@@ -192,6 +228,7 @@ export const TournamentPage = () => {
           champion: null,
         },
       });
+
       setTournament((prev) => ({
         ...prev,
         stage: "Registration",
@@ -202,7 +239,9 @@ export const TournamentPage = () => {
           champion: null,
         },
       }));
-      alert("Tournament has been reset.");
+
+      setMatches([]);
+      alert("Tournament reset! Matches deleted, teams remain.");
     } catch (err) {
       console.error(err);
       alert("Failed to reset tournament.");
@@ -222,213 +261,8 @@ export const TournamentPage = () => {
   const teams = tournament.teamsQualified || [];
   const canRegister = teams.length < 8;
 
-  // Prepare complete bracket rounds for react-brackets - always show full tournament
-  const rounds = [
-    {
-      title: "Quarter Finals",
-      seeds: [
-        {
-          id: 1,
-          date: new Date().toDateString(),
-          teams: [
-            {
-              name: tournament.bracket?.quarterFinals?.[0]?.teams?.[0]
-                ? typeof tournament.bracket.quarterFinals[0].teams[0] ===
-                    "string" &&
-                  teamsData[tournament.bracket.quarterFinals[0].teams[0]]
-                  ? teamsData[tournament.bracket.quarterFinals[0].teams[0]]
-                      ?.federationID ||
-                    teamsData[tournament.bracket.quarterFinals[0].teams[0]]
-                      ?.name ||
-                    teamsData[tournament.bracket.quarterFinals[0].teams[0]]
-                      ?.federation ||
-                    tournament.bracket.quarterFinals[0].teams[0]
-                  : tournament.bracket.quarterFinals[0].teams[0]
-                : "TBD",
-            },
-            {
-              name: tournament.bracket?.quarterFinals?.[0]?.teams?.[1]
-                ? typeof tournament.bracket.quarterFinals[0].teams[1] ===
-                    "string" &&
-                  teamsData[tournament.bracket.quarterFinals[0].teams[1]]
-                  ? teamsData[tournament.bracket.quarterFinals[0].teams[1]]
-                      ?.federationID || "Unknown"
-                  : tournament.bracket.quarterFinals[0].teams[1]
-                : "TBD",
-            },
-          ],
-        },
-        {
-          id: 2,
-          date: new Date().toDateString(),
-          teams: [
-            {
-              name: tournament.bracket?.quarterFinals?.[1]?.teams?.[0]
-                ? typeof tournament.bracket.quarterFinals[1].teams[0] ===
-                    "string" &&
-                  teamsData[tournament.bracket.quarterFinals[1].teams[0]]
-                  ? teamsData[tournament.bracket.quarterFinals[1].teams[0]]
-                      ?.federationID || "Unknown"
-                  : tournament.bracket.quarterFinals[1].teams[0]
-                : "TBD",
-            },
-            {
-              name: tournament.bracket?.quarterFinals?.[1]?.teams?.[1]
-                ? typeof tournament.bracket.quarterFinals[1].teams[1] ===
-                    "string" &&
-                  teamsData[tournament.bracket.quarterFinals[1].teams[1]]
-                  ? teamsData[tournament.bracket.quarterFinals[1].teams[1]]
-                      ?.federationID || "Unknown"
-                  : tournament.bracket.quarterFinals[1].teams[1]
-                : "TBD",
-            },
-          ],
-        },
-        {
-          id: 3,
-          date: new Date().toDateString(),
-          teams: [
-            {
-              name: tournament.bracket?.quarterFinals?.[2]?.teams?.[0]
-                ? typeof tournament.bracket.quarterFinals[2].teams[0] ===
-                    "string" &&
-                  teamsData[tournament.bracket.quarterFinals[2].teams[0]]
-                  ? teamsData[tournament.bracket.quarterFinals[2].teams[0]]
-                      ?.federationID || "Unknown"
-                  : tournament.bracket.quarterFinals[2].teams[0]
-                : "TBD",
-            },
-            {
-              name: tournament.bracket?.quarterFinals?.[2]?.teams?.[1]
-                ? typeof tournament.bracket.quarterFinals[2].teams[1] ===
-                    "string" &&
-                  teamsData[tournament.bracket.quarterFinals[2].teams[1]]
-                  ? teamsData[tournament.bracket.quarterFinals[2].teams[1]]
-                      ?.federationID || "Unknown"
-                  : tournament.bracket.quarterFinals[2].teams[1]
-                : "TBD",
-            },
-          ],
-        },
-        {
-          id: 4,
-          date: new Date().toDateString(),
-          teams: [
-            {
-              name: tournament.bracket?.quarterFinals?.[3]?.teams?.[0]
-                ? typeof tournament.bracket.quarterFinals[3].teams[0] ===
-                    "string" &&
-                  teamsData[tournament.bracket.quarterFinals[3].teams[0]]
-                  ? teamsData[tournament.bracket.quarterFinals[3].teams[0]]
-                      ?.federationID || "Unknown"
-                  : tournament.bracket.quarterFinals[3].teams[0]
-                : "TBD",
-            },
-            {
-              name: tournament.bracket?.quarterFinals?.[3]?.teams?.[1]
-                ? typeof tournament.bracket.quarterFinals[3].teams[1] ===
-                    "string" &&
-                  teamsData[tournament.bracket.quarterFinals[3].teams[1]]
-                  ? teamsData[tournament.bracket.quarterFinals[3].teams[1]]
-                      ?.federationID || "Unknown"
-                  : tournament.bracket.quarterFinals[3].teams[1]
-                : "TBD",
-            },
-          ],
-        },
-      ],
-    },
-    {
-      title: "Semi Finals",
-      seeds: [
-        {
-          id: 5,
-          date: new Date().toDateString(),
-          teams: [
-            {
-              name: tournament.bracket?.semiFinals?.[0]?.teams?.[0]
-                ? typeof tournament.bracket.semiFinals[0].teams[0] ===
-                    "string" &&
-                  teamsData[tournament.bracket.semiFinals[0].teams[0]]
-                  ? teamsData[tournament.bracket.semiFinals[0].teams[0]]
-                      ?.federationID || "Unknown"
-                  : tournament.bracket.semiFinals[0].teams[0]
-                : "Winner of Match 1",
-            },
-            {
-              name: tournament.bracket?.semiFinals?.[0]?.teams?.[1]
-                ? typeof tournament.bracket.semiFinals[0].teams[1] ===
-                    "string" &&
-                  teamsData[tournament.bracket.semiFinals[0].teams[1]]
-                  ? teamsData[tournament.bracket.semiFinals[0].teams[1]]
-                      ?.federationID || "Unknown"
-                  : tournament.bracket.semiFinals[0].teams[1]
-                : "Winner of Match 2",
-            },
-          ],
-        },
-        {
-          id: 6,
-          date: new Date().toDateString(),
-          teams: [
-            {
-              name: tournament.bracket?.semiFinals?.[1]?.teams?.[0]
-                ? typeof tournament.bracket.semiFinals[1].teams[0] ===
-                    "string" &&
-                  teamsData[tournament.bracket.semiFinals[1].teams[0]]
-                  ? teamsData[tournament.bracket.semiFinals[1].teams[0]]
-                      ?.federationID || "Unknown"
-                  : tournament.bracket.semiFinals[1].teams[0]
-                : "Winner of Match 3",
-            },
-            {
-              name: tournament.bracket?.semiFinals?.[1]?.teams?.[1]
-                ? typeof tournament.bracket.semiFinals[1].teams[1] ===
-                    "string" &&
-                  teamsData[tournament.bracket.semiFinals[1].teams[1]]
-                  ? teamsData[tournament.bracket.semiFinals[1].teams[1]]
-                      ?.federationID || "Unknown"
-                  : tournament.bracket.semiFinals[1].teams[1]
-                : "Winner of Match 4",
-            },
-          ],
-        },
-      ],
-    },
-    {
-      title: "Final",
-      seeds: [
-        {
-          id: 7,
-          date: new Date().toDateString(),
-          teams: [
-            {
-              name: tournament.bracket?.final?.[0]?.teams?.[0]
-                ? typeof tournament.bracket.final[0].teams[0] === "string" &&
-                  teamsData[tournament.bracket.final[0].teams[0]]
-                  ? teamsData[tournament.bracket.final[0].teams[0]]
-                      ?.federationID || "Unknown"
-                  : tournament.bracket.final[0].teams[0]
-                : "Winner of Semi 1",
-            },
-            {
-              name: tournament.bracket?.final?.[0]?.teams?.[1]
-                ? typeof tournament.bracket.final[0].teams[1] === "string" &&
-                  teamsData[tournament.bracket.final[0].teams[1]]
-                  ? teamsData[tournament.bracket.final[0].teams[1]]
-                      ?.federationID || "Unknown"
-                  : tournament.bracket.final[0].teams[1]
-                : "Winner of Semi 2",
-            },
-          ],
-        },
-      ],
-    },
-  ];
-
   return (
     <div className="p-6 max-w-6xl mx-auto">
-      {/* Tournament Header */}
       <div className="bg-gradient-to-r from-blue-500 to-indigo-600 text-white p-6 rounded-lg shadow-lg mb-6">
         <h1 className="text-4xl font-bold mb-2">{tournament.name}</h1>
         <p className="text-lg">
@@ -439,7 +273,6 @@ export const TournamentPage = () => {
         </p>
       </div>
 
-      {/* Admin Controls */}
       {user?.role === "admin" && (
         <div className="flex flex-wrap gap-4 mb-6">
           {teams.length === 8 && !tournament.bracket?.quarterFinals?.length && (
@@ -461,19 +294,18 @@ export const TournamentPage = () => {
         </div>
       )}
 
-      {/* Teams Section */}
+      {/* Teams */}
       <h2 className="text-2xl font-semibold mb-4">Teams</h2>
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 mb-6">
         {teams.map((teamId) => (
           <Link
-            to={`/teamPage/${teamId}`}
             key={teamId}
-            className="bg-white border rounded-xl p-6 shadow-lg hover:shadow-2xl transition transform hover:-translate-y-1 flex flex-col justify-between"
+            to={`/teamPage/${teamId}`}
+            className="bg-white border rounded-xl p-6 shadow-lg hover:shadow-2xl transition flex flex-col justify-between"
           >
             <h3 className="text-xl font-bold mb-2">
               {teamsData[teamId]?.federationID ||
                 teamsData[teamId]?.name ||
-                teamsData[teamId]?.federation ||
                 teamId}
             </h3>
             <p className="text-gray-600">
@@ -481,7 +313,6 @@ export const TournamentPage = () => {
             </p>
           </Link>
         ))}
-
         {canRegister && (
           <div
             onClick={() => registerTeam(user.teamID)}
@@ -492,60 +323,133 @@ export const TournamentPage = () => {
         )}
       </div>
 
-      {/* Bracket Section - Always Show Complete Tournament */}
+      {/* Matches */}
+      <h2 className="text-2xl font-semibold mb-4">Matches</h2>
+      <div className="space-y-4 mb-8">
+        {matches.map((match) => (
+          <Link
+            key={match.id}
+            to={`/match/${match.id}`} // navigate to match page
+            className="block p-4 bg-gray-100 rounded-lg shadow flex justify-between items-center hover:bg-gray-200 transition"
+          >
+            <span>
+              {teamsData[match.team1ID]?.federationID || match.team1ID}
+            </span>
+            <span className="font-bold">vs</span>
+            <span>
+              {teamsData[match.team2ID]?.federationID || match.team2ID}
+            </span>
+            <span className="text-sm text-gray-500">{match.stage}</span>
+          </Link>
+        ))}
+      </div>
+
+      {/* Bracket */}
       <div className="mt-8">
         <h2 className="text-2xl font-semibold mb-4">Tournament Bracket</h2>
-        {/* React Brackets Implementation */}
         <div className="bg-gray-50 rounded-xl shadow-inner p-8 overflow-x-auto">
           <div style={{ minWidth: "1400px" }}>
             <Bracket
-              rounds={rounds}
-              renderSeedComponent={({
-                seed,
-                breakpoint,
-                roundIndex,
-                seedIndex,
-              }) => (
+              rounds={
+                tournament.bracket?.quarterFinals
+                  ? [
+                      {
+                        title: "Quarter Finals",
+                        seeds: tournament.bracket.quarterFinals.map((q, i) => ({
+                          id: i + 1,
+                          teams: [
+                            {
+                              name:
+                                teamsData[q.teams[0]]?.federationID ||
+                                q.teams[0] ||
+                                "TBD",
+                            },
+                            {
+                              name:
+                                teamsData[q.teams[1]]?.federationID ||
+                                q.teams[1] ||
+                                "TBD",
+                            },
+                          ],
+                        })),
+                      },
+                      {
+                        title: "Semi Finals",
+                        seeds: tournament.bracket.semiFinals.map((s, i) => ({
+                          id: i + 5,
+                          teams: [{ name: s.teams[0] }, { name: s.teams[1] }],
+                        })),
+                      },
+                      {
+                        title: "Final",
+                        seeds: tournament.bracket.final.map((f, i) => ({
+                          id: i + 7,
+                          teams: [{ name: f.teams[0] }, { name: f.teams[1] }],
+                        })),
+                      },
+                      {
+                        title: "Winner",
+                        seeds: [
+                          {
+                            id: 8,
+                            teams: [
+                              {
+                                name: tournament.bracket?.champion || "TBD",
+                              },
+                            ],
+                          },
+                        ],
+                      },
+                    ]
+                  : []
+              }
+              renderSeedComponent={({ seed, breakpoint }) => (
                 <Seed key={seed.id} seed={seed} breakpoint={breakpoint}>
                   <SeedItem
                     style={{
-                      backgroundColor: "#ffffff",
+                      backgroundColor: "#fff",
                       border: "1px solid #e2e8f0",
                       borderRadius: "8px",
                       padding: "12px",
                       margin: "4px 0",
-                      boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
                       minWidth: "240px",
                       textAlign: "center",
                     }}
                   >
-                    <div
-                      style={{
-                        fontWeight: "bold",
-                        marginBottom: "8px",
-                        color:
-                          seed.teams[0]?.name === "TBD" ||
-                          seed.teams[0]?.name?.includes("Winner")
-                            ? "#9ca3af"
-                            : "#374151",
-                      }}
-                    >
-                      {seed.teams[0]?.name || "TBD"}
-                    </div>
-                    <div style={{ fontSize: "12px", color: "#666" }}>vs</div>
-                    <div
-                      style={{
-                        fontWeight: "bold",
-                        marginTop: "8px",
-                        color:
-                          seed.teams[1]?.name === "TBD" ||
-                          seed.teams[1]?.name?.includes("Winner")
-                            ? "#9ca3af"
-                            : "#374151",
-                      }}
-                    >
-                      {seed.teams[1]?.name || "TBD"}
-                    </div>
+                    {seed.teams.length === 2 ? (
+                      <>
+                        <div
+                          style={{
+                            fontWeight: "bold",
+                            color: "#374151",
+                            marginBottom: "8px",
+                          }}
+                        >
+                          {seed.teams[0].name}
+                        </div>
+                        <div style={{ fontSize: "12px", color: "#666" }}>
+                          vs
+                        </div>
+                        <div
+                          style={{
+                            fontWeight: "bold",
+                            color: "#374151",
+                            marginTop: "8px",
+                          }}
+                        >
+                          {seed.teams[1].name}
+                        </div>
+                      </>
+                    ) : (
+                      <div
+                        style={{
+                          fontWeight: "bold",
+                          color: "#10B981", // green for winner
+                        }}
+                      >
+                        {seed.teams[0].name}
+                      </div>
+                    )}
                   </SeedItem>
                 </Seed>
               )}
