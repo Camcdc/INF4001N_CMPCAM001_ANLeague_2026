@@ -34,7 +34,7 @@ export const Navbar = () => {
         </Link>
         &nbsp;|&nbsp;
         <Link
-          to="/create-tournaments"
+          to="/allTournaments"
           className="font-semibold hover:text-blue-500"
         >
           Tournaments

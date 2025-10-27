@@ -28,20 +28,42 @@ export const Team = () => {
 
   // Fetch team and players
   useEffect(() => {
-    if (!user) return;
+    if (userLoading) return;
+    if (!user) {
+      navigate("/login");
+      return;
+    }
 
     const fetchTeamAndPlayers = async () => {
       try {
+        setLoading(true);
+        setError("");
+
+        // Wait a bit for auth to fully initialize
+        await new Promise((resolve) => setTimeout(resolve, 100));
+
         const userDocRef = doc(db, "users", user.uid);
         const userSnap = await getDoc(userDocRef);
-        if (!userSnap.exists()) throw new Error("No user document found.");
 
-        const teamID = userSnap.data()?.teamID;
-        if (!teamID) throw new Error("User has no team assigned.");
+        if (!userSnap.exists()) {
+          throw new Error("User profile not found. Please register first.");
+        }
+
+        const userData = userSnap.data();
+        const teamID = userData?.teamID;
+
+        if (!teamID) {
+          navigate("/register-team");
+          return;
+        }
 
         const teamDocRef = doc(db, "teams", teamID);
         const teamSnap = await getDoc(teamDocRef);
-        if (!teamSnap.exists()) throw new Error("No team document found.");
+
+        if (!teamSnap.exists()) {
+          throw new Error("Team not found. It may have been deleted.");
+        }
+
         setTeamData({ id: teamSnap.id, ...teamSnap.data() });
 
         const playersQuery = query(
@@ -55,14 +77,25 @@ export const Team = () => {
         }));
         setPlayers(playerList);
       } catch (err) {
-        setError(err.message || "Error fetching data.");
+        console.error("Error fetching team data:", err);
+        if (err.code === "permission-denied") {
+          setError(
+            "Permission denied. Please make sure you're logged in and have access to this team."
+          );
+        } else if (err.code === "unavailable") {
+          setError("Service temporarily unavailable. Please try again later.");
+        } else {
+          setError(
+            err.message || "Error fetching team data. Please try again."
+          );
+        }
       } finally {
         setLoading(false);
       }
     };
 
     fetchTeamAndPlayers();
-  }, [user]);
+  }, [user, userLoading, navigate]);
 
   const openModal = (player) => setSelectedPlayer(player);
   const closeModal = () => {
@@ -74,6 +107,11 @@ export const Team = () => {
   const handleEditSubmit = async (e) => {
     e.preventDefault();
     try {
+      if (!user) {
+        setError("You must be logged in to edit players.");
+        return;
+      }
+
       const playerRef = doc(db, "players", selectedPlayer.id);
 
       // If making captain, unset current captain first
@@ -107,8 +145,16 @@ export const Team = () => {
 
       setSelectedPlayer({ ...selectedPlayer, ...editData });
       setIsEditing(false);
+      alert("Player updated successfully!");
     } catch (err) {
       console.error("Error updating player:", err);
+      if (err.code === "permission-denied") {
+        setError(
+          "Permission denied. You don't have access to edit this player."
+        );
+      } else {
+        setError("Error updating player. Please try again.");
+      }
     }
   };
 
@@ -150,6 +196,14 @@ export const Team = () => {
       navigate("/");
     } catch (err) {
       console.error("Error deleting team:", err);
+      if (err.code === "permission-denied") {
+        setError(
+          "Permission denied. You don't have access to delete this team."
+        );
+      } else {
+        setError("Error deleting team. Please try again.");
+      }
+      setLoading(false);
     }
   };
 

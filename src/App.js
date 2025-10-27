@@ -1,12 +1,13 @@
 import { Route, BrowserRouter as Router, Routes } from "react-router-dom";
 import "./App.css";
 import { Navbar } from "./components/navbar";
-import { CreateTournaments } from "./pages/create-tournaments";
+import { CreateTournaments } from "./pages/allTournaments";
 import { Login } from "./pages/login";
 import { Main } from "./pages/main";
+import { Team } from "./pages/myTeam";
 import { Register } from "./pages/register";
 import { RegisterTeam } from "./pages/register-team";
-import { Team } from "./pages/team";
+import { TeamPage } from "./pages/teamPage";
 import { TournamentPage } from "./pages/tournament-page";
 
 function App() {
@@ -19,9 +20,10 @@ function App() {
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
           <Route path="/register-team" element={<RegisterTeam />} />
-          <Route path="/team" element={<Team />} />
-          <Route path="/create-tournaments" element={<CreateTournaments />} />
+          <Route path="/myTeam" element={<Team />} />
+          <Route path="/allTournaments" element={<CreateTournaments />} />
           <Route path="/tournament/:id" element={<TournamentPage />} />
+          <Route path="/teamPage/:id" element={<TeamPage />} />
         </Routes>
       </Router>
     </div>

@@ -21,13 +21,13 @@ export const Main = () => {
           </h2>
           <div>
             {userData?.hasTeam ? (
-              <Link to="/team">View Team</Link>
+              <Link to="/myTeam">View Team</Link>
             ) : (
               <Link to="/register-team">Register Team</Link>
             )}
           </div>
           <div>
-            <Link to="/create-tournaments">Manage Tournaments</Link>
+            <Link to="/allTournaments">Manage Tournaments</Link>
           </div>
         </div>
       ) : (
