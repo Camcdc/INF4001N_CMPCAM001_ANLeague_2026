@@ -183,6 +183,23 @@ export const TournamentPage = () => {
       },
     });
 
+    // Ensure team data is fully loaded before updating tournament state
+    if (Object.keys(teamsData).length !== teams.length) {
+      // Re-fetch team data to ensure all teams are loaded
+      const teamDocs = await Promise.all(
+        teams.map(async (teamId) => {
+          const docSnap = await getDoc(doc(db, "teams", teamId));
+          return docSnap.exists() ? { [teamId]: docSnap.data() } : null;
+        })
+      );
+      const validTeams = teamDocs.filter((t) => t !== null);
+      const updatedTeamsData = validTeams.reduce(
+        (acc, curr) => ({ ...acc, ...curr }),
+        {}
+      );
+      setTeamsData(updatedTeamsData);
+    }
+
     setTournament((prev) => ({
       ...prev,
       stage: "Quarter Finals",
@@ -272,7 +289,6 @@ export const TournamentPage = () => {
           </span>
         </p>
       </div>
-
       {user?.role === "admin" && (
         <div className="flex flex-wrap gap-4 mb-6">
           {teams.length === 8 && !tournament.bracket?.quarterFinals?.length && (
@@ -293,7 +309,6 @@ export const TournamentPage = () => {
           )}
         </div>
       )}
-
       {/* Teams */}
       <h2 className="text-2xl font-semibold mb-4">Teams</h2>
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 mb-6">
@@ -322,7 +337,6 @@ export const TournamentPage = () => {
           </div>
         )}
       </div>
-
       {/* Matches */}
       <h2 className="text-2xl font-semibold mb-4">Matches</h2>
       <div className="space-y-4 mb-8">
@@ -330,20 +344,54 @@ export const TournamentPage = () => {
           <Link
             key={match.id}
             to={`/match/${match.id}`} // navigate to match page
-            className="block p-4 bg-gray-100 rounded-lg shadow flex justify-between items-center hover:bg-gray-200 transition"
+            className={`p-4 rounded-lg shadow flex justify-between items-center transition ${
+              match.simulated
+                ? "bg-green-50 border-l-4 border-green-500 hover:bg-green-100"
+                : "bg-gray-100 hover:bg-gray-200"
+            }`}
           >
-            <span>
-              {teamsData[match.team1ID]?.federationID || match.team1ID}
-            </span>
-            <span className="font-bold">vs</span>
-            <span>
-              {teamsData[match.team2ID]?.federationID || match.team2ID}
-            </span>
-            <span className="text-sm text-gray-500">{match.stage}</span>
+            <div className="flex items-center space-x-4">
+              <span className="font-medium">
+                {teamsData[match.team1ID]?.federationID || match.team1ID}
+              </span>
+              {match.simulated && match.score ? (
+                <span className="text-lg font-bold text-green-700">
+                  {match.score.team1}
+                </span>
+              ) : null}
+            </div>
+
+            <div className="flex items-center space-x-2">
+              <span className="font-bold text-gray-600">vs</span>
+            </div>
+
+            <div className="flex items-center space-x-4">
+              {match.simulated && match.score ? (
+                <span className="text-lg font-bold text-green-700">
+                  {match.score.team2}
+                </span>
+              ) : null}
+              <span className="font-medium">
+                {teamsData[match.team2ID]?.federationID || match.team2ID}
+              </span>
+            </div>
+
+            <div className="flex items-center space-x-2">
+              <span className="text-sm text-gray-500">{match.stage}</span>
+              {!match.simulated && (
+                <span className="text-xs bg-yellow-200 text-yellow-800 px-2 py-1 rounded-full">
+                  UPCOMING
+                </span>
+              )}
+              {match.simulated && (
+                <span className="text-xs bg-green-200 text-green-800 px-2 py-1 rounded-full">
+                  COMPLETED
+                </span>
+              )}
+            </div>
           </Link>
         ))}
-      </div>
-
+      </div>{" "}
       {/* Bracket */}
       <div className="mt-8">
         <h2 className="text-2xl font-semibold mb-4">Tournament Bracket</h2>
