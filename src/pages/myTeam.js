@@ -168,6 +168,36 @@ export const Team = () => {
       return;
 
     try {
+      // Check if team is in any active tournaments (tournaments that have started)
+      console.log("Checking for active tournaments...");
+      const tournamentsQuery = query(
+        collection(db, "tournament"),
+        where("teamsQualified", "array-contains", teamData.id)
+      );
+      const tournamentSnap = await getDocs(tournamentsQuery);
+
+      const activeTournaments = tournamentSnap.docs.filter((doc) => {
+        const tournamentData = doc.data();
+        const stage = tournamentData.stage;
+        // Tournament is active if it's not in "Registration" or "Waiting for Teams" stage
+        return (
+          stage &&
+          stage !== "Registration" &&
+          stage !== "Waiting for Teams" &&
+          stage !== "Registration Open"
+        );
+      });
+
+      if (activeTournaments.length > 0) {
+        const tournamentNames = activeTournaments
+          .map((doc) => doc.data().name)
+          .join(", ");
+        alert(
+          `Your team is currently participating in an active tournament(s): ${tournamentNames}. Please wait until the tournament(s) are completed to delete your team.`
+        );
+        return;
+      }
+
       // Delete all players linked to the team
       const playersQuery = query(
         collection(db, "players"),
@@ -182,7 +212,31 @@ export const Team = () => {
       // Delete team document
       await deleteDoc(doc(db, "teams", teamData.id));
 
-      // Clear user’s team reference
+      // Remove team from all tournaments it's registered for
+      console.log("Removing team from tournaments...");
+      const allTournamentsQuery = query(
+        collection(db, "tournament"),
+        where("teamsQualified", "array-contains", teamData.id)
+      );
+      const allTournamentSnap = await getDocs(allTournamentsQuery);
+
+      const tournamentUpdatePromises = allTournamentSnap.docs.map(
+        async (tournamentDoc) => {
+          const currentTeams = tournamentDoc.data().teamsQualified || [];
+          const updatedTeams = currentTeams.filter(
+            (teamId) => teamId !== teamData.id
+          );
+
+          return updateDoc(doc(db, "tournament", tournamentDoc.id), {
+            teamsQualified: updatedTeams,
+          });
+        }
+      );
+
+      await Promise.all(tournamentUpdatePromises);
+      console.log("Team removed from all tournaments");
+
+      // Clear user's team reference
       const userRef = doc(db, "users", user.uid);
       await updateDoc(userRef, {
         hasTeam: false,

@@ -34,18 +34,27 @@ export const CreateTournaments = () => {
           if (data.teamsQualified && data.teamsQualified.length > 0) {
             const teams = await Promise.all(
               data.teamsQualified.map(async (teamId) => {
-                const teamDoc = await getDoc(doc(db, "teams", teamId));
-                if (teamDoc.exists()) {
-                  return {
-                    id: teamId,
-                    federationID: teamDoc.data().federationID || "Unknown",
-                  };
-                } else {
-                  return { id: teamId, federationID: "Unknown" };
+                try {
+                  const teamDoc = await getDoc(doc(db, "teams", teamId));
+                  if (teamDoc.exists()) {
+                    return {
+                      id: teamId,
+                      federationID: teamDoc.data().federationID || "Unknown",
+                    };
+                  } else {
+                    console.warn(
+                      `Team ${teamId} not found, removing from tournament`
+                    );
+                    return null; // Team doesn't exist, will be filtered out
+                  }
+                } catch (error) {
+                  console.error(`Error fetching team ${teamId}:`, error);
+                  return null;
                 }
               })
             );
-            data.teamsQualified = teams; // Replace team IDs with objects containing federationIDs
+            // Filter out null values (deleted teams)
+            data.teamsQualified = teams.filter((team) => team !== null);
           } else {
             data.teamsQualified = [];
           }

@@ -1,5 +1,13 @@
 import confetti from "canvas-confetti";
-import { doc, getDoc, updateDoc } from "firebase/firestore";
+import {
+  collection,
+  doc,
+  getDoc,
+  getDocs,
+  query,
+  updateDoc,
+  where,
+} from "firebase/firestore";
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { db } from "../config/firebase";
@@ -14,6 +22,10 @@ export const MatchPage = () => {
   const [previousScore, setPreviousScore] = useState(null);
   const [isSimulating, setIsSimulating] = useState(false);
   const [matchStatus, setMatchStatus] = useState("Pending");
+  const [team1Data, setTeam1Data] = useState(null);
+  const [team2Data, setTeam2Data] = useState(null);
+  const [team1Players, setTeam1Players] = useState([]);
+  const [team2Players, setTeam2Players] = useState([]);
 
   useEffect(() => {
     const fetchMatch = async () => {
@@ -23,6 +35,45 @@ export const MatchPage = () => {
           const matchData = { id: matchDoc.id, ...matchDoc.data() };
           setMatch(matchData);
           setCommentary(matchData.commentary || []);
+
+          // Fetch team data for federationIDs
+          if (matchData.team1ID) {
+            const team1Doc = await getDoc(doc(db, "teams", matchData.team1ID));
+            if (team1Doc.exists()) {
+              setTeam1Data(team1Doc.data());
+
+              // Fetch team1 players
+              const team1PlayersQuery = query(
+                collection(db, "players"),
+                where("teamID", "==", matchData.team1ID)
+              );
+              const team1PlayersSnap = await getDocs(team1PlayersQuery);
+              const team1PlayersList = team1PlayersSnap.docs.map((doc) => ({
+                id: doc.id,
+                ...doc.data(),
+              }));
+              setTeam1Players(team1PlayersList);
+            }
+          }
+
+          if (matchData.team2ID) {
+            const team2Doc = await getDoc(doc(db, "teams", matchData.team2ID));
+            if (team2Doc.exists()) {
+              setTeam2Data(team2Doc.data());
+
+              // Fetch team2 players
+              const team2PlayersQuery = query(
+                collection(db, "players"),
+                where("teamID", "==", matchData.team2ID)
+              );
+              const team2PlayersSnap = await getDocs(team2PlayersQuery);
+              const team2PlayersList = team2PlayersSnap.docs.map((doc) => ({
+                id: doc.id,
+                ...doc.data(),
+              }));
+              setTeam2Players(team2PlayersList);
+            }
+          }
 
           // Set initial previous score for comparison
           if (matchData.score) {
@@ -68,9 +119,13 @@ export const MatchPage = () => {
 
       let commentaryText = "";
       if (team1Change > 0) {
-        commentaryText = `GOAL! ${match.team1ID} scores! Current score: ${match.score.team1}-${match.score.team2}`;
+        commentaryText = `GOAL! ${
+          team1Data?.federationID || match.team1ID
+        } scores! Current score: ${match.score.team1}-${match.score.team2}`;
       } else if (team2Change > 0) {
-        commentaryText = `GOAL! ${match.team2ID} scores! Current score: ${match.score.team1}-${match.score.team2}`;
+        commentaryText = `GOAL! ${
+          team2Data?.federationID || match.team2ID
+        } scores! Current score: ${match.score.team1}-${match.score.team2}`;
       }
 
       if (commentaryText) {
@@ -127,6 +182,66 @@ export const MatchPage = () => {
     }, 400);
   };
 
+  // Function to update player goal count in Firebase
+  const updatePlayerGoalCount = async (playerName, teamName) => {
+    try {
+      console.log(
+        `Updating goal count for player: ${playerName} from team: ${teamName}`
+      );
+
+      // Determine which team's players to search through
+      const playersToSearch =
+        teamName === (team1Data?.federationID || match.team1ID)
+          ? team1Players
+          : team2Players;
+
+      // Find the player by name (case-insensitive)
+      const player = playersToSearch.find(
+        (p) =>
+          p.name &&
+          p.name.toLowerCase().trim() === playerName.toLowerCase().trim()
+      );
+
+      if (player) {
+        console.log(`Found player: ${player.name} (ID: ${player.id})`);
+
+        // Get current goal count (default to 0 if not set)
+        const currentGoals = player.goals || 0;
+        const newGoals = currentGoals + 1;
+
+        // Update the player's goal count in Firebase
+        await updateDoc(doc(db, "players", player.id), {
+          goals: newGoals,
+        });
+
+        // Update local state
+        if (teamName === (team1Data?.federationID || match.team1ID)) {
+          setTeam1Players((prev) =>
+            prev.map((p) =>
+              p.id === player.id ? { ...p, goals: newGoals } : p
+            )
+          );
+        } else {
+          setTeam2Players((prev) =>
+            prev.map((p) =>
+              p.id === player.id ? { ...p, goals: newGoals } : p
+            )
+          );
+        }
+
+        console.log(
+          `✅ Updated ${player.name}'s goals from ${currentGoals} to ${newGoals}`
+        );
+      } else {
+        console.log(
+          `❌ Player "${playerName}" not found in team "${teamName}"`
+        );
+      }
+    } catch (error) {
+      console.error("Error updating player goal count:", error);
+    }
+  };
+
   // Main match simulation function using AI
   const simulateMatch = async () => {
     if (!match || isSimulating) return;
@@ -145,8 +260,10 @@ export const MatchPage = () => {
     try {
       // Use the simplified AI function to simulate the entire match
       const matchResult = await simulateFootballMatch(
-        match.team1ID,
-        match.team2ID
+        team1Data?.federationID || match.team1ID,
+        team2Data?.federationID || match.team2ID,
+        team1Players,
+        team2Players
       );
 
       console.log("AI Match Result:", matchResult);
@@ -169,10 +286,17 @@ export const MatchPage = () => {
 
         // Update score if this is a goal
         if (event.type === "goal") {
-          if (event.team === match.team1ID) {
+          if (event.team === (team1Data?.federationID || match.team1ID)) {
             currentScore.team1++;
-          } else if (event.team === match.team2ID) {
+          } else if (
+            event.team === (team2Data?.federationID || match.team2ID)
+          ) {
             currentScore.team2++;
+          }
+
+          // Update player goal count if player information is available
+          if (event.player && event.player.trim() !== "") {
+            await updatePlayerGoalCount(event.player, event.team);
           }
 
           // Update Firebase and state with current score after each goal
@@ -205,7 +329,9 @@ export const MatchPage = () => {
 
       // Add final "Full-time!" commentary
       const fullTimeCommentary = {
-        text: `Full-time! ${match.team1ID} ${currentScore.team1} - ${currentScore.team2} ${match.team2ID}`,
+        text: `Full-time! ${team1Data?.federationID || match.team1ID} ${
+          currentScore.team1
+        } - ${currentScore.team2} ${team2Data?.federationID || match.team2ID}`,
         minute: 90,
         timestamp: new Date().toISOString(),
       };
@@ -219,12 +345,41 @@ export const MatchPage = () => {
       });
 
       // Set final score and status (use our calculated score, not AI's finalScore)
-      await updateDoc(doc(db, "matches", matchId), {
+      // Determine winner for regular time
+      let winnerTeamId = "";
+      if (currentScore.team1 > currentScore.team2) {
+        winnerTeamId = match.team1ID;
+        console.log("🏆 Regular time winner: Team 1 -", winnerTeamId);
+      } else if (currentScore.team2 > currentScore.team1) {
+        winnerTeamId = match.team2ID;
+        console.log("🏆 Regular time winner: Team 2 -", winnerTeamId);
+      } else {
+        console.log("⚖️ Match is tied, no winner yet (going to penalties)");
+      }
+      // If tied, winnerID will be set after penalty shootout
+
+      console.log("💾 Updating match with winner ID:", winnerTeamId);
+      try {
+        await updateDoc(doc(db, "matches", matchId), {
+          score: currentScore,
+          status: "Full Time",
+          simulated: true,
+          winnerID: winnerTeamId, // Set winner ID (empty if draw)
+        });
+        console.log(
+          "✅ Successfully updated match with winnerID:",
+          winnerTeamId
+        );
+      } catch (error) {
+        console.error("❌ Error updating match with winnerID:", error);
+      }
+
+      setMatch((prev) => ({
+        ...prev,
         score: currentScore,
-        status: "Full Time",
         simulated: true,
-      });
-      setMatch((prev) => ({ ...prev, score: currentScore, simulated: true }));
+        winnerID: winnerTeamId,
+      }));
       setMatchStatus("Full Time");
 
       // 🎉 GAME OVER CELEBRATION!
@@ -270,18 +425,57 @@ export const MatchPage = () => {
           match
         );
 
+        // Determine penalty shootout winner
+        let penaltyWinnerTeamId = "";
+        if (
+          penaltyResult.penaltyScore.team1 > penaltyResult.penaltyScore.team2
+        ) {
+          penaltyWinnerTeamId = match.team1ID;
+          console.log(
+            "🥅 Penalty shootout winner: Team 1 -",
+            penaltyWinnerTeamId
+          );
+        } else if (
+          penaltyResult.penaltyScore.team2 > penaltyResult.penaltyScore.team1
+        ) {
+          penaltyWinnerTeamId = match.team2ID;
+          console.log(
+            "🥅 Penalty shootout winner: Team 2 -",
+            penaltyWinnerTeamId
+          );
+        }
+
+        console.log(
+          "💾 Updating match with penalty winner ID:",
+          penaltyWinnerTeamId
+        );
+
         // Update final score with penalty result
-        await updateDoc(doc(db, "matches", matchId), {
-          score: penaltyResult.finalScore,
-          penaltyScore: penaltyResult.penaltyScore,
-          simulated: true,
-          status: "Full Time",
-        });
+        try {
+          await updateDoc(doc(db, "matches", matchId), {
+            score: penaltyResult.finalScore,
+            penaltyScore: penaltyResult.penaltyScore,
+            simulated: true,
+            status: "Full Time",
+            winnerID: penaltyWinnerTeamId, // Set penalty shootout winner
+          });
+          console.log(
+            "✅ Successfully updated match with penalty winnerID:",
+            penaltyWinnerTeamId
+          );
+        } catch (error) {
+          console.error(
+            "❌ Error updating match with penalty winnerID:",
+            error
+          );
+        }
+
         setMatch((prev) => ({
           ...prev,
           score: penaltyResult.finalScore,
           penaltyScore: penaltyResult.penaltyScore,
           simulated: true,
+          winnerID: penaltyWinnerTeamId,
         }));
 
         // Add penalty shootout commentary
@@ -310,8 +504,8 @@ export const MatchPage = () => {
 
   // Simulate penalty shootout
   const simulatePenaltyShootout = async (currentScore, matchData) => {
-    const team1Name = matchData.team1ID;
-    const team2Name = matchData.team2ID;
+    const team1Name = team1Data?.federationID || matchData.team1ID;
+    const team2Name = team2Data?.federationID || matchData.team2ID;
     let team1Penalties = 0;
     let team2Penalties = 0;
     const commentary = [];
@@ -319,18 +513,32 @@ export const MatchPage = () => {
 
     // Standard 5 penalty rounds
     for (let round = 1; round <= 5; round++) {
+      // Get random players for penalties
+      const team1Player =
+        team1Players.length > 0
+          ? team1Players[
+              Math.floor(Math.random() * Math.min(team1Players.length, 11))
+            ].name
+          : "Player";
+      const team2Player =
+        team2Players.length > 0
+          ? team2Players[
+              Math.floor(Math.random() * Math.min(team2Players.length, 11))
+            ].name
+          : "Player";
+
       // Team 1 penalty
       const team1Success = Math.random() < 0.75; // 75% success rate
       if (team1Success) {
         team1Penalties++;
         commentary.push({
-          text: `Penalty ${round} - ${team1Name} SCORES! 🥅 Penalty score: ${team1Penalties}-${team2Penalties}`,
+          text: `Penalty ${round} - ${team1Player} (${team1Name}) SCORES! 🥅 Penalty score: ${team1Penalties}-${team2Penalties}`,
           minute: 91 + round,
           timestamp: new Date().toISOString(),
         });
       } else {
         commentary.push({
-          text: `Penalty ${round} - ${team1Name} MISSES! ❌ Penalty score: ${team1Penalties}-${team2Penalties}`,
+          text: `Penalty ${round} - ${team1Player} (${team1Name}) MISSES! ❌ Penalty score: ${team1Penalties}-${team2Penalties}`,
           minute: 91 + round,
           timestamp: new Date().toISOString(),
         });
@@ -341,13 +549,13 @@ export const MatchPage = () => {
       if (team2Success) {
         team2Penalties++;
         commentary.push({
-          text: `Penalty ${round} - ${team2Name} SCORES! 🥅 Penalty score: ${team1Penalties}-${team2Penalties}`,
+          text: `Penalty ${round} - ${team2Player} (${team2Name}) SCORES! 🥅 Penalty score: ${team1Penalties}-${team2Penalties}`,
           minute: 91 + round,
           timestamp: new Date().toISOString(),
         });
       } else {
         commentary.push({
-          text: `Penalty ${round} - ${team2Name} MISSES! ❌ Penalty score: ${team1Penalties}-${team2Penalties}`,
+          text: `Penalty ${round} - ${team2Player} (${team2Name}) MISSES! ❌ Penalty score: ${team1Penalties}-${team2Penalties}`,
           minute: 91 + round,
           timestamp: new Date().toISOString(),
         });
@@ -360,18 +568,32 @@ export const MatchPage = () => {
     while (team1Penalties === team2Penalties) {
       penaltyRound++;
 
+      // Get random players for sudden death penalties
+      const team1SuddenPlayer =
+        team1Players.length > 0
+          ? team1Players[
+              Math.floor(Math.random() * Math.min(team1Players.length, 11))
+            ].name
+          : "Player";
+      const team2SuddenPlayer =
+        team2Players.length > 0
+          ? team2Players[
+              Math.floor(Math.random() * Math.min(team2Players.length, 11))
+            ].name
+          : "Player";
+
       // Team 1 sudden death penalty
       const team1Success = Math.random() < 0.7; // Slightly lower success rate in sudden death
       if (team1Success) {
         team1Penalties++;
         commentary.push({
-          text: `Sudden Death ${penaltyRound} - ${team1Name} SCORES! 🥅 Penalty score: ${team1Penalties}-${team2Penalties}`,
+          text: `Sudden Death ${penaltyRound} - ${team1SuddenPlayer} (${team1Name}) SCORES! 🥅 Penalty score: ${team1Penalties}-${team2Penalties}`,
           minute: 91 + penaltyRound,
           timestamp: new Date().toISOString(),
         });
       } else {
         commentary.push({
-          text: `Sudden Death ${penaltyRound} - ${team1Name} MISSES! ❌ Penalty score: ${team1Penalties}-${team2Penalties}`,
+          text: `Sudden Death ${penaltyRound} - ${team1SuddenPlayer} (${team1Name}) MISSES! ❌ Penalty score: ${team1Penalties}-${team2Penalties}`,
           minute: 91 + penaltyRound,
           timestamp: new Date().toISOString(),
         });
@@ -382,13 +604,13 @@ export const MatchPage = () => {
       if (team2Success) {
         team2Penalties++;
         commentary.push({
-          text: `Sudden Death ${penaltyRound} - ${team2Name} SCORES! 🥅 Penalty score: ${team1Penalties}-${team2Penalties}`,
+          text: `Sudden Death ${penaltyRound} - ${team2SuddenPlayer} (${team2Name}) SCORES! 🥅 Penalty score: ${team1Penalties}-${team2Penalties}`,
           minute: 91 + penaltyRound,
           timestamp: new Date().toISOString(),
         });
       } else {
         commentary.push({
-          text: `Sudden Death ${penaltyRound} - ${team2Name} MISSES! ❌ Penalty score: ${team1Penalties}-${team2Penalties}`,
+          text: `Sudden Death ${penaltyRound} - ${team2SuddenPlayer} (${team2Name}) MISSES! ❌ Penalty score: ${team1Penalties}-${team2Penalties}`,
           minute: 91 + penaltyRound,
           timestamp: new Date().toISOString(),
         });
@@ -416,20 +638,16 @@ export const MatchPage = () => {
       }
     }
 
-    // Determine winner and update match score
-    const finalScore = { ...currentScore };
+    // Determine winner and keep original match score
+    const finalScore = { ...currentScore }; // Keep the original tied score
     const winner = team1Penalties > team2Penalties ? team1Name : team2Name;
 
-    // Winner gets 1 added to their score for the win
-    if (team1Penalties > team2Penalties) {
-      finalScore.team1++;
-    } else {
-      finalScore.team2++;
-    }
+    // In football, penalty shootouts don't change the regular time score
+    // The match remains a draw (e.g., 1-1) and penalty score determines the winner
 
     // Add final penalty result commentary
     commentary.push({
-      text: `🏆 ${winner} wins the penalty shootout ${team1Penalties}-${team2Penalties}! Match result: ${matchData.team1ID} ${finalScore.team1}-${finalScore.team2} ${matchData.team2ID}`,
+      text: `🏆 ${winner} wins the penalty shootout ${team1Penalties}-${team2Penalties}! Match result: ${team1Name} ${finalScore.team1}-${finalScore.team2} ${team2Name}`,
       minute: 95,
       timestamp: new Date().toISOString(),
     });
@@ -456,6 +674,45 @@ export const MatchPage = () => {
     }
   };
 
+  // Test function to manually set winnerID
+  const testSetWinnerID = async () => {
+    if (!match) return;
+
+    try {
+      // Determine winner based on current score
+      let testWinnerID = "";
+      if (match.score.team1 > match.score.team2) {
+        testWinnerID = match.team1ID;
+      } else if (match.score.team2 > match.score.team1) {
+        testWinnerID = match.team2ID;
+      } else {
+        // If tied, just pick team1 for testing
+        testWinnerID = match.team1ID;
+      }
+
+      console.log("🧪 Testing winnerID update with:", testWinnerID);
+
+      await updateDoc(doc(db, "matches", matchId), {
+        winnerID: testWinnerID,
+        simulated: true,
+      });
+
+      console.log("✅ Test winnerID update successful!");
+      alert(`Winner ID set to: ${testWinnerID}`);
+
+      // Refresh the match data to verify
+      const matchDoc = await getDoc(doc(db, "matches", matchId));
+      if (matchDoc.exists()) {
+        const updatedMatch = { id: matchDoc.id, ...matchDoc.data() };
+        setMatch(updatedMatch);
+        console.log("📊 Updated match data:", updatedMatch);
+      }
+    } catch (error) {
+      console.error("❌ Error in test winnerID update:", error);
+      alert(`Error: ${error.message}`);
+    }
+  };
+
   const resetMatch = async () => {
     try {
       // Reset match to initial state
@@ -478,6 +735,7 @@ export const MatchPage = () => {
         status: "Pending",
         penaltyScore: null, // Clear penalty scores in Firebase too
         simulated: false, // Reset simulated flag
+        winnerID: "", // Clear winner ID
       });
 
       console.log("Match reset successfully");
@@ -503,11 +761,44 @@ export const MatchPage = () => {
       {/* Match Header */}
       <h1 className="text-3xl font-bold text-center mb-8">Match Details</h1>
 
+      {/* Debug Section */}
+      <div className="mb-6 p-4 bg-gray-100 rounded-lg">
+        <h3 className="text-lg font-semibold mb-2">Debug Information:</h3>
+        <div className="text-sm space-y-1">
+          <p>
+            <strong>Match ID:</strong> {matchId}
+          </p>
+          <p>
+            <strong>Simulated:</strong> {match.simulated ? "Yes" : "No"}
+          </p>
+          <p>
+            <strong>Winner ID:</strong> {match.winnerID || "Not set"}
+          </p>
+          <p>
+            <strong>Score:</strong> {match.score?.team1 || 0} -{" "}
+            {match.score?.team2 || 0}
+          </p>
+          {match.penaltyScore && (
+            <p>
+              <strong>Penalties:</strong> {match.penaltyScore.team1} -{" "}
+              {match.penaltyScore.team2}
+            </p>
+          )}
+        </div>
+        <button
+          onClick={testSetWinnerID}
+          className="mt-2 px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600"
+        >
+          Test Set Winner ID
+        </button>
+      </div>
+
       {/* Teams and Score */}
       <div className="text-center mb-6">
         <h2 className="text-2xl font-semibold mb-4">
-          {match.team1ID} <span className="text-gray-500">VS</span>{" "}
-          {match.team2ID}
+          {team1Data?.federationID || match.team1ID}{" "}
+          <span className="text-gray-500">VS</span>{" "}
+          {team2Data?.federationID || match.team2ID}
         </h2>
         <div className="flex justify-center items-center gap-12 text-4xl font-extrabold">
           <span>{match.score.team1}</span>
@@ -519,10 +810,36 @@ export const MatchPage = () => {
         {match.penaltyScore && (
           <div className="mt-4 text-center">
             <p className="text-sm text-gray-600 mb-2">After Penalty Shootout</p>
-            <div className="flex justify-center items-center gap-8 text-lg font-semibold text-blue-600">
-              <span>Penalties: {match.penaltyScore.team1}</span>
-              <span>–</span>
-              <span>{match.penaltyScore.team2}</span>
+            <div className="flex justify-center items-center gap-8 text-lg font-semibold">
+              <span
+                className={
+                  match.penaltyScore.team1 > match.penaltyScore.team2
+                    ? "text-green-600"
+                    : "text-blue-600"
+                }
+              >
+                Penalties: {match.penaltyScore.team1}
+              </span>
+              <span className="text-gray-500">–</span>
+              <span
+                className={
+                  match.penaltyScore.team2 > match.penaltyScore.team1
+                    ? "text-green-600"
+                    : "text-blue-600"
+                }
+              >
+                {match.penaltyScore.team2}
+              </span>
+            </div>
+            {/* Show penalty winner */}
+            <div className="mt-2">
+              <span className="text-sm font-medium text-green-700 bg-green-100 px-3 py-1 rounded-full">
+                🏆{" "}
+                {match.penaltyScore.team1 > match.penaltyScore.team2
+                  ? team1Data?.federationID || match.team1ID
+                  : team2Data?.federationID || match.team2ID}{" "}
+                wins on penalties
+              </span>
             </div>
           </div>
         )}
@@ -532,6 +849,76 @@ export const MatchPage = () => {
       <p className="text-center mb-6 text-lg font-medium text-gray-600">
         {matchStatus}
       </p>
+
+      {/* Team Players Section */}
+      {(team1Players.length > 0 || team2Players.length > 0) && (
+        <div className="border-t border-gray-300 pt-4 mb-6">
+          <h3 className="text-lg font-semibold mb-4 text-center">
+            Team Squads
+          </h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Team 1 Players */}
+            <div className="bg-blue-50 rounded-lg p-4">
+              <h4 className="font-semibold text-blue-800 mb-3 text-center">
+                {team1Data?.federationID || match.team1ID} Squad
+              </h4>
+              <div className="grid grid-cols-2 gap-2">
+                {team1Players.slice(0, 11).map((player, idx) => (
+                  <div
+                    key={player.id}
+                    className="bg-white rounded p-2 text-sm text-center"
+                  >
+                    <div className="font-medium">{player.name}</div>
+                    <div className="text-gray-500 text-xs">
+                      {player.position}
+                    </div>
+                    {player.goals > 0 && (
+                      <div className="text-green-600 text-xs font-semibold mt-1">
+                        ⚽ {player.goals} goal{player.goals !== 1 ? "s" : ""}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+              {team1Players.length > 11 && (
+                <p className="text-xs text-gray-600 mt-2 text-center">
+                  +{team1Players.length - 11} substitutes
+                </p>
+              )}
+            </div>
+
+            {/* Team 2 Players */}
+            <div className="bg-green-50 rounded-lg p-4">
+              <h4 className="font-semibold text-green-800 mb-3 text-center">
+                {team2Data?.federationID || match.team2ID} Squad
+              </h4>
+              <div className="grid grid-cols-2 gap-2">
+                {team2Players.slice(0, 11).map((player, idx) => (
+                  <div
+                    key={player.id}
+                    className="bg-white rounded p-2 text-sm text-center"
+                  >
+                    <div className="font-medium">{player.name}</div>
+                    <div className="text-gray-500 text-xs">
+                      {player.position}
+                    </div>
+                    {player.goals > 0 && (
+                      <div className="text-green-600 text-xs font-semibold mt-1">
+                        ⚽ {player.goals} goal{player.goals !== 1 ? "s" : ""}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+              {team2Players.length > 11 && (
+                <p className="text-xs text-gray-600 mt-2 text-center">
+                  +{team2Players.length - 11} substitutes
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Match Simulation Controls */}
       <div className="border-t border-gray-300 pt-4 mb-6">
@@ -550,6 +937,14 @@ export const MatchPage = () => {
             className="bg-orange-600 hover:bg-orange-700 disabled:bg-orange-400 text-white px-4 py-2 rounded-lg font-medium transition-colors"
           >
             🔄 Reset Match
+          </button>
+
+          <button
+            onClick={testSetWinnerID}
+            disabled={isSimulating}
+            className="bg-purple-600 hover:bg-purple-700 disabled:bg-purple-400 text-white px-4 py-2 rounded-lg font-medium transition-colors"
+          >
+            🧪 Test Set Winner
           </button>
         </div>
 

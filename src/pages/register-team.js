@@ -1,4 +1,5 @@
-import { getAuth } from "firebase/auth";
+import { faker } from "@faker-js/faker";
+import { getAuth, onAuthStateChanged } from "firebase/auth";
 import {
   addDoc,
   collection,
@@ -7,7 +8,7 @@ import {
   serverTimestamp,
   updateDoc,
 } from "firebase/firestore";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { db } from "../config/firebase";
 
@@ -15,8 +16,33 @@ export const RegisterTeam = () => {
   const navigate = useNavigate();
   const [managerName, setManagerName] = useState("");
   const [players, setPlayers] = useState([]);
+  const [currentUser, setCurrentUser] = useState(null);
+  const [loading, setLoading] = useState(true);
   const auth = getAuth();
-  const currentUser = auth.currentUser;
+
+  // Monitor authentication state
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      console.log("Auth state changed:", user);
+      if (user) {
+        setCurrentUser(user);
+      } else {
+        console.log("No user authenticated, redirecting to login");
+        navigate("/login");
+      }
+      setLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, [auth, navigate]);
+
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center h-screen">
+        Loading...
+      </div>
+    );
+  }
 
   // Update a player field
   const handlePlayerChange = (index, field, value) => {
@@ -27,9 +53,25 @@ export const RegisterTeam = () => {
 
   // Fetch user federationID
   const fetchUserFederation = async () => {
-    if (!currentUser) return "";
-    const userDoc = await getDoc(doc(db, "users", currentUser.uid));
-    return userDoc.exists() ? userDoc.data().federationID || "" : "";
+    if (!currentUser) {
+      console.log("No current user found");
+      return "";
+    }
+    console.log("Fetching federation for user:", currentUser.uid);
+    try {
+      const userDoc = await getDoc(doc(db, "users", currentUser.uid));
+      if (userDoc.exists()) {
+        const userData = userDoc.data();
+        console.log("User data:", userData);
+        return userData.federationID || "";
+      } else {
+        console.log("User document does not exist");
+        return "";
+      }
+    } catch (error) {
+      console.error("Error fetching user federation:", error);
+      return "";
+    }
   };
 
   // Generate random ratings
@@ -51,13 +93,21 @@ export const RegisterTeam = () => {
   };
 
   const handleRegisterTeam = async () => {
+    console.log("Starting team registration...");
+    console.log("Manager name:", managerName);
+    console.log("Players count:", players.length);
+    console.log("Current user:", currentUser);
+
     const federationID = await fetchUserFederation();
+    console.log("Federation ID:", federationID);
+
     if (!managerName || players.length !== 23) {
       alert("Please fill manager name and exactly 23 players");
       return;
     }
 
     try {
+      console.log("Creating team document...");
       // 1️⃣ Create team document
       const teamDocRef = await addDoc(collection(db, "teams"), {
         manager: managerName,
@@ -73,13 +123,16 @@ export const RegisterTeam = () => {
         tournamentID: "",
         createdAt: serverTimestamp(),
       });
+      console.log("Team document created with ID:", teamDocRef.id);
 
       let totalRating = 0;
       let captainID = "";
 
+      console.log("Creating player documents...");
       // 2️⃣ Create player documents
       const playerNames = [];
       for (const p of players) {
+        console.log("Creating player:", p.name);
         const ratings = generateRatings(p.position);
         const overallRating = calculateOverallRating(ratings);
         totalRating += overallRating;
@@ -99,6 +152,7 @@ export const RegisterTeam = () => {
         if (p.isCaptain) captainID = playerDocRef.id;
       }
 
+      console.log("Updating team document with players and captain...");
       // 3️⃣ Update team document with players and captain
       await updateDoc(teamDocRef, {
         players: playerNames,
@@ -106,26 +160,34 @@ export const RegisterTeam = () => {
         captainID,
       });
 
+      console.log("Updating user document with teamID...");
       // 4️⃣ Update user document with teamID
       if (currentUser) {
         await updateDoc(doc(db, "users", currentUser.uid), {
           hasTeam: true,
           teamID: teamDocRef.id,
         });
+        console.log("User document updated successfully");
+      } else {
+        console.error("No current user to update");
+        alert("Error: No authenticated user found");
+        return;
       }
 
+      console.log("Team registration completed successfully!");
       alert("Team and players registered successfully!");
       navigate("/"); // "/" is your home page route
     } catch (error) {
       console.error("Error registering team:", error);
-      alert("Failed to register team.");
+      console.error("Error details:", error.message);
+      alert(`Failed to register team: ${error.message}`);
     }
   };
 
   const autoFillPlayers = () => {
     const positions = ["GK", "DF", "MD", "AT"];
     const newPlayers = Array.from({ length: 23 }, (_, i) => ({
-      name: `Player ${i + 1}`,
+      name: faker.person.fullName(), // Generate realistic full names
       position: positions[i % 4],
       isCaptain: i === 0, // first player is captain by default
     }));
