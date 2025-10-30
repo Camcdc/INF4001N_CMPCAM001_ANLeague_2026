@@ -23,7 +23,7 @@ function App() {
           <Route path="/register-team" element={<RegisterTeam />} />
           <Route path="/myTeam" element={<Team />} />
           <Route path="/allTournaments" element={<CreateTournaments />} />
-          <Route path="/tournament/:id" element={<TournamentPage />} />
+          <Route path="/tournament-page/:id" element={<TournamentPage />} />
           <Route path="/teamPage/:id" element={<TeamPage />} />
           <Route path="/match/:matchId" element={<MatchPage />} />
         </Routes>

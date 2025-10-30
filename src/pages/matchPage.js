@@ -9,7 +9,7 @@ import {
   where,
 } from "firebase/firestore";
 import { useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 import { db } from "../config/firebase";
 import { simulateFootballMatch } from "../utils/geminiAI";
 
@@ -674,44 +674,7 @@ export const MatchPage = () => {
     }
   };
 
-  // Test function to manually set winnerID
-  const testSetWinnerID = async () => {
-    if (!match) return;
-
-    try {
-      // Determine winner based on current score
-      let testWinnerID = "";
-      if (match.score.team1 > match.score.team2) {
-        testWinnerID = match.team1ID;
-      } else if (match.score.team2 > match.score.team1) {
-        testWinnerID = match.team2ID;
-      } else {
-        // If tied, just pick team1 for testing
-        testWinnerID = match.team1ID;
-      }
-
-      console.log("🧪 Testing winnerID update with:", testWinnerID);
-
-      await updateDoc(doc(db, "matches", matchId), {
-        winnerID: testWinnerID,
-        simulated: true,
-      });
-
-      console.log("✅ Test winnerID update successful!");
-      alert(`Winner ID set to: ${testWinnerID}`);
-
-      // Refresh the match data to verify
-      const matchDoc = await getDoc(doc(db, "matches", matchId));
-      if (matchDoc.exists()) {
-        const updatedMatch = { id: matchDoc.id, ...matchDoc.data() };
-        setMatch(updatedMatch);
-        console.log("📊 Updated match data:", updatedMatch);
-      }
-    } catch (error) {
-      console.error("❌ Error in test winnerID update:", error);
-      alert(`Error: ${error.message}`);
-    }
-  };
+  // (Removed) Test helper to manually set winnerID — debug/testing helpers removed for production
 
   const resetMatch = async () => {
     try {
@@ -757,41 +720,38 @@ export const MatchPage = () => {
     );
 
   return (
-    <div className="max-w-4xl mx-auto mt-12 p-6 bg-white shadow-lg rounded-lg border border-gray-200">
-      {/* Match Header */}
-      <h1 className="text-3xl font-bold text-center mb-8">Match Details</h1>
-
-      {/* Debug Section */}
-      <div className="mb-6 p-4 bg-gray-100 rounded-lg">
-        <h3 className="text-lg font-semibold mb-2">Debug Information:</h3>
-        <div className="text-sm space-y-1">
-          <p>
-            <strong>Match ID:</strong> {matchId}
-          </p>
-          <p>
-            <strong>Simulated:</strong> {match.simulated ? "Yes" : "No"}
-          </p>
-          <p>
-            <strong>Winner ID:</strong> {match.winnerID || "Not set"}
-          </p>
-          <p>
-            <strong>Score:</strong> {match.score?.team1 || 0} -{" "}
-            {match.score?.team2 || 0}
-          </p>
-          {match.penaltyScore && (
-            <p>
-              <strong>Penalties:</strong> {match.penaltyScore.team1} -{" "}
-              {match.penaltyScore.team2}
-            </p>
-          )}
+    <div className="max-w-4xl mx-auto mt-12 p-6 bg-white shadow-lg rounded-lg border border-gray-200 relative">
+      {/* Back to Tournament Button - Top Left */}
+      {match?.tournamentID && (
+        <div className="absolute top-4 left-4">
+          <Link
+            to={`/tournament-page/${match.tournamentID}`}
+            className="inline-flex items-center px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-200 font-medium text-sm"
+          >
+            <svg
+              className="w-4 h-4 mr-1"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M15 19l-7-7 7-7"
+              />
+            </svg>
+            Back to Tournament
+          </Link>
         </div>
-        <button
-          onClick={testSetWinnerID}
-          className="mt-2 px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600"
-        >
-          Test Set Winner ID
-        </button>
-      </div>
+      )}
+
+      {/* Match Header */}
+      <h1 className="text-3xl font-bold text-center mb-8 mt-4">
+        Match Details
+      </h1>
+
+      {/* (Debug section removed) */}
 
       {/* Teams and Score */}
       <div className="text-center mb-6">
@@ -939,13 +899,7 @@ export const MatchPage = () => {
             🔄 Reset Match
           </button>
 
-          <button
-            onClick={testSetWinnerID}
-            disabled={isSimulating}
-            className="bg-purple-600 hover:bg-purple-700 disabled:bg-purple-400 text-white px-4 py-2 rounded-lg font-medium transition-colors"
-          >
-            🧪 Test Set Winner
-          </button>
+          {/* Test helper removed in production build */}
         </div>
 
         {isSimulating && (
