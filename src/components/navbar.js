@@ -40,7 +40,9 @@ export const Navbar = () => {
           Tournaments
         </Link>
         &nbsp;|&nbsp;
-        <Link className="font-semibold hover:text-blue-500">Fixtures</Link>
+        <Link className="font-semibold hover:text-blue-500" to="/fixtures">
+          Fixtures
+        </Link>
         &nbsp;|&nbsp;
         <Link className="font-semibold hover:text-blue-500">Players</Link>
         &nbsp;|&nbsp;
