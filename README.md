@@ -1,53 +1,251 @@
-# Getting Started with Create React App
+# ⚽ African Nations League 2026 - Tournament Management System
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+A comprehensive web application for managing football tournaments, teams, matches, and live simulations for the African Nations League 2026.
 
-## Available Scripts
+## 🎯 What is this app?
 
-In the project directory, you can run:
+The African Nations League 2026 app is a full-stack tournament management system that allows users to:
 
-### `npm start`
+- **Create and manage tournaments** with automatic bracket generation
+- **Register teams** with detailed squad information
+- **View live match simulations** with AI-powered commentary
+- **Track fixtures and results** across multiple tournaments
+- **Browse team profiles** and statistics
+- **Follow tournament progression** from quarter-finals to finals
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in your browser.
+The app simulates realistic football matches with dynamic commentary, penalty shootouts, and automatic bracket progression based on match results.
 
-The page will reload when you make changes.\
-You may also see any lint errors in the console.
+## 🚀 Tech Stack
 
-### `npm test`
+### Frontend
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+- **React 19.2.0** - Modern UI framework with hooks
+- **React Router** - Client-side routing and navigation
+- **Tailwind CSS** - Utility-first CSS framework for styling
+- **Canvas Confetti** - Celebration animations for match wins
+- **Framer Motion** - Smooth animations and transitions
+- **Lucide React** - Beautiful icon library
 
-### `npm run build`
+### Backend & Database
 
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
+- **Firebase Firestore** - NoSQL cloud database for real-time data
+- **Firebase Authentication** - User authentication and authorization
+- **Firebase Analytics** - User behavior tracking
 
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
+### AI & Simulation
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
+- **Google Generative AI (Gemini)** - AI-powered match commentary generation
+- **Custom Match Engine** - Realistic football match simulation with events
+- **Dynamic Commentary System** - Real-time match narration
 
-### `npm run eject`
+### Development Tools
 
-**Note: this is a one-way operation. Once you `eject`, you can't go back!**
+- **Create React App** - Project scaffolding and build tools
+- **ESLint** - Code linting and quality checks
+- **Jest & React Testing Library** - Unit and integration testing
 
-If you aren't satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
+## 📁 Project Structure
 
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you're on your own.
+```
+src/
+├── components/
+│   └── navbar.js          # Navigation component
+├── config/
+│   └── firebase.js        # Firebase configuration
+├── pages/
+│   ├── allTournaments.js  # Tournament listing and creation
+│   ├── fixtures.js        # Match fixtures and results
+│   ├── login.js           # User authentication
+│   ├── main.js            # Dashboard/home page
+│   ├── matchPage.js       # Live match simulation
+│   ├── myTeam.js          # User's team management
+│   ├── register.js        # User registration
+│   ├── register-team.js   # Team registration
+│   ├── teamPage.js        # Individual team profiles
+│   ├── teams.js           # Teams listing
+│   └── tournament-page.js # Tournament management
+└── utils/
+    └── geminiAI.js        # AI commentary generation
+```
 
-You don't have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn't feel obligated to use this feature. However we understand that this tool wouldn't be useful if you couldn't customize it when you are ready for it.
+## 🛠️ Prerequisites
 
-## Learn More
+Before running the app, make sure you have:
 
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
+- **Node.js** (version 16 or higher)
+- **npm** (comes with Node.js)
+- **Firebase project** with Firestore enabled
+- **Google Generative AI API key** (for match commentary)
 
-To learn React, check out the [React documentation](https://reactjs.org/).
+## 🚀 Getting Started
 
-### Code Splitting
+### 1. Clone the Repository
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/code-splitting](https://facebook.github.io/create-react-app/docs/code-splitting)
+```bash
+git clone <repository-url>
+cd INF4001N_CMPCAM001_ANLeague_2026
+```
+
+### 2. Install Dependencies
+
+```bash
+npm install
+```
+
+### 3. Environment Setup
+
+Create a `.env` file in the root directory with your API keys:
+
+```env
+REACT_APP_GEMINI_API_KEY=your_gemini_api_key_here
+```
+
+### 4. Firebase Configuration
+
+Update `src/config/firebase.js` with your Firebase project credentials:
+
+```javascript
+const firebaseConfig = {
+  apiKey: "your-api-key",
+  authDomain: "your-project.firebaseapp.com",
+  projectId: "your-project-id",
+  storageBucket: "your-project.firebasestorage.app",
+  messagingSenderId: "your-sender-id",
+  appId: "your-app-id",
+};
+```
+
+### 5. Run the Application
+
+#### Development Mode
+
+```bash
+npm start
+```
+
+Opens the app at [http://localhost:3000](http://localhost:3000) with hot reload.
+
+#### Production Build
+
+```bash
+npm run build
+```
+
+Creates an optimized build in the `build/` folder ready for deployment.
+
+#### Run Tests
+
+```bash
+npm test
+```
+
+Launches the test runner in interactive watch mode.
+
+## 🎮 How to Use
+
+### For Tournament Organizers
+
+1. **Register** an account and **log in**
+2. **Create tournaments** and set up bracket structures
+3. **Register teams** with squad details
+4. **Start matches** and watch live simulations
+5. **Track progression** through knockout rounds
+
+### For Viewers
+
+1. **Browse tournaments** and view brackets
+2. **Check fixtures** for upcoming and completed matches
+3. **Watch live matches** with AI commentary
+4. **Explore team profiles** and statistics
+5. **Follow results** across multiple tournaments
+
+## 🔥 Key Features
+
+### Live Match Simulation
+
+- Real-time match events with AI-generated commentary
+- Dynamic scoreline updates and penalty shootouts
+- Celebration animations for goals and wins
+- Detailed match analysis and key moments
+
+### Tournament Management
+
+- Automatic bracket generation (QF → SF → F)
+- Winner progression and next-round creation
+- Duplicate match prevention
+- Tournament status tracking
+
+### Team & Player Management
+
+- Comprehensive team profiles
+- Squad management with player details
+- Team statistics and performance tracking
+- Federation ID-based identification
+
+### Modern UI/UX
+
+- Responsive design for all devices
+- Smooth animations and transitions
+- Intuitive navigation and user flows
+- Real-time data updates
+
+## 🔧 Available Scripts
+
+- `npm start` - Run development server
+- `npm test` - Run test suite
+- `npm run build` - Create production build
+- `npm run eject` - Eject from Create React App (one-way operation)
+
+## 📝 Database Collections
+
+The app uses Firebase Firestore with these main collections:
+
+- **tournaments** - Tournament data and brackets
+- **teams** - Team information and squads
+- **matches** - Match results and commentary
+- **players** - Individual player statistics
+- **users** - User accounts and preferences
+
+## 🤝 Contributing
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+## 📄 License
+
+This project is licensed under the MIT License - see the LICENSE file for details.
+
+## 🆘 Troubleshooting
+
+### Common Issues
+
+**Build fails with dependency errors:**
+
+```bash
+npm ci --legacy-peer-deps
+```
+
+**Firebase connection issues:**
+
+- Verify your Firebase configuration in `src/config/firebase.js`
+- Ensure Firestore and Authentication are enabled in Firebase Console
+
+**AI commentary not working:**
+
+- Check your Gemini API key in the `.env` file
+- Verify the API key has proper permissions
+
+**Hot reload not working:**
+
+- Clear browser cache and restart the development server
+- Check for port conflicts on port 3000
+
+---
+
+Made with ⚽ for the African Nations League 2026
 
 ### Analyzing the Bundle Size
 
