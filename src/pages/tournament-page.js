@@ -47,20 +47,31 @@ export const TournamentPage = () => {
           setTournament({ id: tournamentDoc.id, ...tournamentDoc.data() });
         }
 
-        // Get teams data
+        // Get teams data - simplified without loading states
         const tournamentData = tournamentDoc.data();
         if (tournamentData?.teamsQualified?.length > 0) {
-          const teamPromises = tournamentData.teamsQualified.map(
-            async (teamId) => {
-              const teamDoc = await getDoc(doc(db, "teams", teamId));
-              return teamDoc.exists() ? { [teamId]: teamDoc.data() } : null;
-            }
-          );
-          const teamResults = await Promise.all(teamPromises);
-          const validTeams = teamResults.filter(Boolean);
-          setTeamsData(
-            validTeams.reduce((acc, team) => ({ ...acc, ...team }), {})
-          );
+          try {
+            // Fetch all teams data in parallel
+            const teamPromises = tournamentData.teamsQualified.map(
+              async (teamId) => {
+                try {
+                  const teamDoc = await getDoc(doc(db, "teams", teamId));
+                  return teamDoc.exists() ? { [teamId]: teamDoc.data() } : null;
+                } catch (error) {
+                  console.error(`Error fetching team ${teamId}:`, error);
+                  return null;
+                }
+              }
+            );
+
+            const teamResults = await Promise.all(teamPromises);
+            const validTeams = teamResults.filter(Boolean);
+            setTeamsData(
+              validTeams.reduce((acc, team) => ({ ...acc, ...team }), {})
+            );
+          } catch (error) {
+            console.error("Error loading teams data:", error);
+          }
         }
 
         // Get matches data
@@ -252,14 +263,28 @@ export const TournamentPage = () => {
     }
 
     try {
+      // First, fetch the team data immediately
+      const teamDoc = await getDoc(doc(db, "teams", teamID));
+      const teamData = teamDoc.exists() ? teamDoc.data() : null;
+
+      // Update tournament document
       await updateDoc(doc(db, "tournament", id), {
         teamsQualified: arrayUnion(teamID),
       });
 
+      // Update local tournament state
       setTournament((prev) => ({
         ...prev,
         teamsQualified: [...(prev.teamsQualified || []), teamID],
       }));
+
+      // Immediately add team data to teamsData so federationID shows right away
+      if (teamData) {
+        setTeamsData((prev) => ({
+          ...prev,
+          [teamID]: teamData,
+        }));
+      }
 
       alert("Team registered successfully!");
     } catch (error) {
@@ -416,13 +441,9 @@ export const TournamentPage = () => {
             className="bg-white border rounded-xl p-6 shadow-lg hover:shadow-2xl transition flex flex-col justify-between"
           >
             <h3 className="text-xl font-bold mb-2">
-              {teamsData[teamId]?.federationID ||
-                teamsData[teamId]?.name ||
-                teamId}
+              {teamsData[teamId]?.federationID || "Loading..."}
             </h3>
-            <p className="text-gray-600">
-              {teamsData[teamId]?.name || `Team ${teamId}`}
-            </p>
+            <p className="text-gray-600">Team</p>
           </Link>
         ))}
         {canRegister && (
@@ -639,7 +660,7 @@ export const TournamentPage = () => {
       {matches.length === 0 && (
         <div className="text-center py-8 bg-gray-50 rounded-lg">
           <p className="text-gray-600 text-lg">
-            No matches created yet. Start the tournament to generate matches!
+            Tournament has not yet started.
           </p>
         </div>
       )}

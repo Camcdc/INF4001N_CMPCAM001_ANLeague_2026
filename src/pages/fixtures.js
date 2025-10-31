@@ -15,24 +15,13 @@ export const Fixtures = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (authUser) => {
-      if (!authUser) {
-        navigate("/login");
-        return;
-      }
-
+    const loadFixtures = async () => {
       // Reset loading states when tab changes
       setTeamsLoading(true);
       setLoading(true);
 
       try {
-        // Get user data
-        const userDoc = await getDoc(doc(db, "users", authUser.uid));
-        if (userDoc.exists()) {
-          setUser({ uid: authUser.uid, ...userDoc.data() });
-        }
-
-        // Get all matches
+        // Get all matches - no authentication required
         const matchesSnapshot = await getDocs(collection(db, "matches"));
         const allMatches = matchesSnapshot.docs.map((doc) => ({
           id: doc.id,
@@ -72,7 +61,6 @@ export const Fixtures = () => {
         setTeamsData(
           validTeams.reduce((acc, team) => ({ ...acc, ...team }), {})
         );
-        setTeamsLoading(false);
 
         // Fetch tournaments referenced by matches so we can group by name
         const tournamentIds = [
@@ -123,11 +111,32 @@ export const Fixtures = () => {
         console.error("Error loading fixtures:", error);
       } finally {
         setLoading(false);
+        setTeamsLoading(false);
+      }
+    };
+
+    // Check authentication state but don't require login
+    const unsubscribe = onAuthStateChanged(auth, async (authUser) => {
+      if (authUser) {
+        // Get user data if logged in
+        try {
+          const userDoc = await getDoc(doc(db, "users", authUser.uid));
+          if (userDoc.exists()) {
+            setUser({ uid: authUser.uid, ...userDoc.data() });
+          }
+        } catch (error) {
+          console.error("Error loading user data:", error);
+        }
+      } else {
+        setUser(null);
       }
     });
 
+    // Load fixtures regardless of authentication status
+    loadFixtures();
+
     return () => unsubscribe();
-  }, [navigate, activeTab]);
+  }, [activeTab]);
 
   if (loading || teamsLoading) {
     return (
@@ -298,22 +307,6 @@ export const Fixtures = () => {
           })()}
         </div>
       )}
-
-      {/* Navigation Links */}
-      <div className="mt-8 text-center space-x-4">
-        <Link
-          to="/main"
-          className="inline-block px-6 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors duration-200"
-        >
-          Back to Home
-        </Link>
-        <Link
-          to="/all-tournaments"
-          className="inline-block px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-200"
-        >
-          View All Tournaments
-        </Link>
-      </div>
     </div>
   );
 };

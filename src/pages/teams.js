@@ -11,17 +11,9 @@ export const Teams = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (authUser) => {
-      if (!authUser) {
-        navigate("/login");
-        return;
-      }
-
+    const loadTeams = async () => {
       try {
-        // Get user data
-        setUser({ uid: authUser.uid });
-
-        // Get all teams
+        // Get all teams - no authentication required
         const teamsSnapshot = await getDocs(collection(db, "teams"));
         const allTeams = teamsSnapshot.docs.map((doc) => ({
           id: doc.id,
@@ -41,10 +33,22 @@ export const Teams = () => {
       } finally {
         setLoading(false);
       }
+    };
+
+    // Check authentication state but don't require login
+    const unsubscribe = onAuthStateChanged(auth, (authUser) => {
+      if (authUser) {
+        setUser({ uid: authUser.uid });
+      } else {
+        setUser(null);
+      }
     });
 
+    // Load teams regardless of authentication status
+    loadTeams();
+
     return () => unsubscribe();
-  }, [navigate]);
+  }, []);
 
   if (loading) {
     return (
@@ -135,28 +139,6 @@ export const Teams = () => {
           ))}
         </div>
       )}
-
-      {/* Navigation Links */}
-      <div className="mt-8 text-center space-x-4">
-        <Link
-          to="/main"
-          className="inline-block px-6 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors duration-200"
-        >
-          Back to Home
-        </Link>
-        <Link
-          to="/all-tournaments"
-          className="inline-block px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors duration-200"
-        >
-          View Tournaments
-        </Link>
-        <Link
-          to="/fixtures"
-          className="inline-block px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors duration-200"
-        >
-          View Fixtures
-        </Link>
-      </div>
     </div>
   );
 };
