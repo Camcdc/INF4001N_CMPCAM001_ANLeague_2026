@@ -1,8 +1,8 @@
-# ⚽ African Nations League 2026 - Tournament Management System
+# African Nations League 2026 - Tournament Management System
 
 A comprehensive web application for managing football tournaments, teams, matches, and live simulations for the African Nations League 2026.
 
-## 🎯 What is this app?
+## What is this app?
 
 The African Nations League 2026 app is a full-stack tournament management system that allows users to:
 
@@ -15,7 +15,7 @@ The African Nations League 2026 app is a full-stack tournament management system
 
 The app simulates realistic football matches with dynamic commentary, penalty shootouts, and automatic bracket progression based on match results.
 
-## 🚀 Tech Stack
+## Tech Stack
 
 ### Frontend
 
@@ -44,7 +44,7 @@ The app simulates realistic football matches with dynamic commentary, penalty sh
 - **ESLint** - Code linting and quality checks
 - **Jest & React Testing Library** - Unit and integration testing
 
-## 📁 Project Structure
+## Project Structure
 
 ```
 src/
@@ -68,16 +68,14 @@ src/
     └── geminiAI.js        # AI commentary generation
 ```
 
-## 🛠️ Prerequisites
+## Prerequisites
 
 Before running the app, make sure you have:
 
 - **Node.js** (version 16 or higher)
 - **npm** (comes with Node.js)
-- **Firebase project** with Firestore enabled
-- **Google Generative AI API key** (for match commentary)
 
-## 🚀 Getting Started
+## Getting Started
 
 ### 1. Clone the Repository
 
@@ -141,7 +139,7 @@ npm test
 
 Launches the test runner in interactive watch mode.
 
-## 🎮 How to Use
+## How to Use
 
 ### For Tournament Organizers
 
@@ -159,7 +157,7 @@ Launches the test runner in interactive watch mode.
 4. **Explore team profiles** and statistics
 5. **Follow results** across multiple tournaments
 
-## 🔥 Key Features
+## Key Features
 
 ### Live Match Simulation
 
@@ -189,13 +187,6 @@ Launches the test runner in interactive watch mode.
 - Intuitive navigation and user flows
 - Real-time data updates
 
-## 🔧 Available Scripts
-
-- `npm start` - Run development server
-- `npm test` - Run test suite
-- `npm run build` - Create production build
-- `npm run eject` - Eject from Create React App (one-way operation)
-
 ## 📝 Database Collections
 
 The app uses Firebase Firestore with these main collections:
@@ -205,64 +196,3 @@ The app uses Firebase Firestore with these main collections:
 - **matches** - Match results and commentary
 - **players** - Individual player statistics
 - **users** - User accounts and preferences
-
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
-## 📄 License
-
-This project is licensed under the MIT License - see the LICENSE file for details.
-
-## 🆘 Troubleshooting
-
-### Common Issues
-
-**Build fails with dependency errors:**
-
-```bash
-npm ci --legacy-peer-deps
-```
-
-**Firebase connection issues:**
-
-- Verify your Firebase configuration in `src/config/firebase.js`
-- Ensure Firestore and Authentication are enabled in Firebase Console
-
-**AI commentary not working:**
-
-- Check your Gemini API key in the `.env` file
-- Verify the API key has proper permissions
-
-**Hot reload not working:**
-
-- Clear browser cache and restart the development server
-- Check for port conflicts on port 3000
-
----
-
-Made with ⚽ for the African Nations League 2026
-
-### Analyzing the Bundle Size
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size](https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size)
-
-### Making a Progressive Web App
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app](https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app)
-
-### Advanced Configuration
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/advanced-configuration](https://facebook.github.io/create-react-app/docs/advanced-configuration)
-
-### Deployment
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/deployment](https://facebook.github.io/create-react-app/docs/deployment)
-
-### `npm run build` fails to minify
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)
