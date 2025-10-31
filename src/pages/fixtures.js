@@ -7,6 +7,7 @@ import { auth, db } from "../config/firebase";
 export const Fixtures = () => {
   const [matches, setMatches] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [teamsLoading, setTeamsLoading] = useState(true);
   const [user, setUser] = useState(null);
   const [teamsData, setTeamsData] = useState({});
   const [tournamentsData, setTournamentsData] = useState({});
@@ -19,6 +20,10 @@ export const Fixtures = () => {
         navigate("/login");
         return;
       }
+
+      // Reset loading states when tab changes
+      setTeamsLoading(true);
+      setLoading(true);
 
       try {
         // Get user data
@@ -67,6 +72,7 @@ export const Fixtures = () => {
         setTeamsData(
           validTeams.reduce((acc, team) => ({ ...acc, ...team }), {})
         );
+        setTeamsLoading(false);
 
         // Fetch tournaments referenced by matches so we can group by name
         const tournamentIds = [
@@ -123,7 +129,7 @@ export const Fixtures = () => {
     return () => unsubscribe();
   }, [navigate, activeTab]);
 
-  if (loading) {
+  if (loading || teamsLoading) {
     return (
       <div className="flex justify-center items-center h-screen">
         <div className="loader border-t-4 border-blue-500 rounded-full w-12 h-12 animate-spin"></div>
@@ -216,7 +222,7 @@ export const Fixtures = () => {
                             <div className="text-sm text-gray-600">Team 1</div>
                             <div className="font-medium text-lg">
                               {teamsData[match.team1ID]?.federationID ||
-                                match.team1ID ||
+                                teamsData[match.team1ID]?.name ||
                                 "TBD"}
                             </div>
                           </div>
@@ -237,7 +243,7 @@ export const Fixtures = () => {
                             <div className="text-sm text-gray-600">Team 2</div>
                             <div className="font-medium text-lg">
                               {teamsData[match.team2ID]?.federationID ||
-                                match.team2ID ||
+                                teamsData[match.team2ID]?.name ||
                                 "TBD"}
                             </div>
                           </div>

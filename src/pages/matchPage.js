@@ -382,9 +382,6 @@ export const MatchPage = () => {
       }));
       setMatchStatus("Full Time");
 
-      // 🎉 GAME OVER CELEBRATION!
-      triggerGoalConfetti();
-
       console.log("Final currentScore:", currentScore);
       console.log(
         "Team1 score:",
@@ -493,6 +490,9 @@ export const MatchPage = () => {
         }
 
         // 🎉 PENALTY SHOOTOUT OVER CELEBRATION!
+        triggerGoalConfetti();
+      } else {
+        // 🎉 REGULAR MATCH OVER CELEBRATION! (No penalties needed)
         triggerGoalConfetti();
       }
     } catch (error) {
@@ -810,71 +810,134 @@ export const MatchPage = () => {
         {matchStatus}
       </p>
 
-      {/* Team Players Section */}
-      {(team1Players.length > 0 || team2Players.length > 0) && (
+      {/* Real-Time Game Analysis */}
+      {match.simulated && commentary.length > 0 && (
         <div className="border-t border-gray-300 pt-4 mb-6">
           <h3 className="text-lg font-semibold mb-4 text-center">
-            Team Squads
+            Game Analysis
           </h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Team 1 Players */}
-            <div className="bg-blue-50 rounded-lg p-4">
-              <h4 className="font-semibold text-blue-800 mb-3 text-center">
-                {team1Data?.federationID || match.team1ID} Squad
-              </h4>
-              <div className="grid grid-cols-2 gap-2">
-                {team1Players.slice(0, 11).map((player, idx) => (
-                  <div
-                    key={player.id}
-                    className="bg-white rounded p-2 text-sm text-center"
-                  >
-                    <div className="font-medium">{player.name}</div>
-                    <div className="text-gray-500 text-xs">
-                      {player.position}
-                    </div>
-                    {player.goals > 0 && (
-                      <div className="text-green-600 text-xs font-semibold mt-1">
-                        ⚽ {player.goals} goal{player.goals !== 1 ? "s" : ""}
-                      </div>
-                    )}
-                  </div>
-                ))}
+          <div className="bg-gradient-to-r from-blue-50 to-green-50 rounded-lg p-4">
+            {/* Goal Scorers from this match */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+              <div className="text-center">
+                <h4 className="font-semibold text-blue-800 mb-2">
+                  {team1Data?.federationID || match.team1ID} Goal Scorers
+                </h4>
+                <div className="space-y-1">
+                  {(() => {
+                    const team1Goals = commentary.filter((item) => {
+                      const text = typeof item === "string" ? item : item.text;
+                      // More specific filtering - only actual goal events, not commentary mentioning goals
+                      return (
+                        (text.toLowerCase().includes("goal!") ||
+                          text.toLowerCase().includes("scores!") ||
+                          (text.toLowerCase().includes("goal") &&
+                            text.toLowerCase().includes("!"))) &&
+                        (text.includes(
+                          team1Data?.federationID || match.team1ID
+                        ) ||
+                          text.toLowerCase().includes("team 1") ||
+                          text.toLowerCase().includes("first team"))
+                      );
+                    });
+
+                    if (team1Goals.length === 0) {
+                      return (
+                        <div className="text-gray-500 text-sm">
+                          No goals scored
+                        </div>
+                      );
+                    }
+
+                    return team1Goals.map((goal, idx) => {
+                      const text = typeof goal === "string" ? goal : goal.text;
+                      const minute =
+                        typeof goal === "object" && goal.minute
+                          ? goal.minute
+                          : "?";
+                      return (
+                        <div
+                          key={idx}
+                          className="bg-white rounded px-3 py-1 text-sm"
+                        >
+                          <span className="text-green-600">⚽ {minute}'</span>
+                          <div className="text-xs text-gray-600 mt-1">
+                            {text}
+                          </div>
+                        </div>
+                      );
+                    });
+                  })()}
+                </div>
               </div>
-              {team1Players.length > 11 && (
-                <p className="text-xs text-gray-600 mt-2 text-center">
-                  +{team1Players.length - 11} substitutes
-                </p>
-              )}
+
+              <div className="text-center">
+                <h4 className="font-semibold text-green-800 mb-2">
+                  {team2Data?.federationID || match.team2ID} Goal Scorers
+                </h4>
+                <div className="space-y-1">
+                  {(() => {
+                    const team2Goals = commentary.filter((item) => {
+                      const text = typeof item === "string" ? item : item.text;
+                      // More specific filtering - only actual goal events, not commentary mentioning goals
+                      return (
+                        (text.toLowerCase().includes("goal!") ||
+                          text.toLowerCase().includes("scores!") ||
+                          (text.toLowerCase().includes("goal") &&
+                            text.toLowerCase().includes("!"))) &&
+                        (text.includes(
+                          team2Data?.federationID || match.team2ID
+                        ) ||
+                          text.toLowerCase().includes("team 2") ||
+                          text.toLowerCase().includes("second team"))
+                      );
+                    });
+
+                    if (team2Goals.length === 0) {
+                      return (
+                        <div className="text-gray-500 text-sm">
+                          No goals scored
+                        </div>
+                      );
+                    }
+
+                    return team2Goals.map((goal, idx) => {
+                      const text = typeof goal === "string" ? goal : goal.text;
+                      const minute =
+                        typeof goal === "object" && goal.minute
+                          ? goal.minute
+                          : "?";
+                      return (
+                        <div
+                          key={idx}
+                          className="bg-white rounded px-3 py-1 text-sm"
+                        >
+                          <span className="text-green-600">⚽ {minute}'</span>
+                          <div className="text-xs text-gray-600 mt-1">
+                            {text}
+                          </div>
+                        </div>
+                      );
+                    });
+                  })()}
+                </div>
+              </div>
             </div>
 
-            {/* Team 2 Players */}
-            <div className="bg-green-50 rounded-lg p-4">
-              <h4 className="font-semibold text-green-800 mb-3 text-center">
-                {team2Data?.federationID || match.team2ID} Squad
-              </h4>
-              <div className="grid grid-cols-2 gap-2">
-                {team2Players.slice(0, 11).map((player, idx) => (
-                  <div
-                    key={player.id}
-                    className="bg-white rounded p-2 text-sm text-center"
-                  >
-                    <div className="font-medium">{player.name}</div>
-                    <div className="text-gray-500 text-xs">
-                      {player.position}
-                    </div>
-                    {player.goals > 0 && (
-                      <div className="text-green-600 text-xs font-semibold mt-1">
-                        ⚽ {player.goals} goal{player.goals !== 1 ? "s" : ""}
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-              {team2Players.length > 11 && (
-                <p className="text-xs text-gray-600 mt-2 text-center">
-                  +{team2Players.length - 11} substitutes
-                </p>
-              )}
+            {/* Match Stats */}
+            <div className="text-center pt-3 border-t border-gray-200">
+              <p className="text-gray-700 font-medium">
+                Total Goals: {match.score.team1 + match.score.team2} | Stage:{" "}
+                {match.stage} |
+                {match.winnerID && (
+                  <span className="text-green-600 ml-1">
+                    Winner:{" "}
+                    {match.winnerID === match.team1ID
+                      ? team1Data?.federationID || match.team1ID
+                      : team2Data?.federationID || match.team2ID}
+                  </span>
+                )}
+              </p>
             </div>
           </div>
         </div>
@@ -924,9 +987,9 @@ export const MatchPage = () => {
         </div>
       )}
 
-      {/* Commentary */}
+      {/* Live Match Events & Commentary */}
       <div className="border-t border-gray-300 pt-4">
-        <h3 className="text-xl font-semibold mb-3">Live Match Commentary</h3>
+        <h3 className="text-xl font-semibold mb-3">Live Match Events</h3>
         {commentary.length > 0 ? (
           <div className="bg-gray-50 rounded-lg p-4 max-h-96 overflow-y-auto">
             <ul className="space-y-3">
@@ -951,23 +1014,67 @@ export const MatchPage = () => {
                       ? commentaryItem.minute
                       : null;
 
+                  // Determine if this is a goal event
+                  const isGoalEvent =
+                    commentaryText.toLowerCase().includes("goal") ||
+                    commentaryText.includes("⚽") ||
+                    commentaryText.toLowerCase().includes("scores");
+
+                  // Determine if this is a key event
+                  const isKeyEvent =
+                    isGoalEvent ||
+                    commentaryText.toLowerCase().includes("penalty") ||
+                    commentaryText.toLowerCase().includes("red card") ||
+                    commentaryText.toLowerCase().includes("yellow card");
+
                   return (
                     <li
                       key={idx}
-                      className="border-l-4 border-green-500 pl-4 py-2 bg-white rounded shadow-sm"
+                      className={`border-l-4 pl-4 py-3 bg-white rounded shadow-sm transition-all ${
+                        isGoalEvent
+                          ? "border-green-500 bg-green-50"
+                          : isKeyEvent
+                          ? "border-yellow-500 bg-yellow-50"
+                          : "border-blue-500"
+                      }`}
                     >
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="text-xs text-green-600 font-medium bg-green-100 px-2 py-1 rounded">
-                          Event #{idx + 1}
-                        </span>
-                        <span className="text-sm font-bold text-blue-600 bg-blue-50 px-3 py-1 rounded-full">
-                          {matchMinute ? `${matchMinute}'` : "?'"}
-                        </span>
-                        <span className="text-xs text-gray-500">
-                          Match Event
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center space-x-2">
+                          {isGoalEvent && (
+                            <span className="text-green-600 text-lg">⚽</span>
+                          )}
+                          {isKeyEvent && !isGoalEvent && (
+                            <span className="text-yellow-600 text-lg">⚠️</span>
+                          )}
+                          <span
+                            className={`text-xs font-medium px-2 py-1 rounded ${
+                              isGoalEvent
+                                ? "text-green-700 bg-green-200"
+                                : isKeyEvent
+                                ? "text-yellow-700 bg-yellow-200"
+                                : "text-blue-600 bg-blue-100"
+                            }`}
+                          >
+                            {isGoalEvent
+                              ? "GOAL!"
+                              : isKeyEvent
+                              ? "Key Event"
+                              : "Match Event"}
+                          </span>
+                        </div>
+                        <span className="text-sm font-bold text-gray-700 bg-gray-100 px-3 py-1 rounded-full">
+                          {matchMinute ? `${matchMinute}'` : "Live"}
                         </span>
                       </div>
-                      <p className="text-gray-800 font-medium">
+                      <p
+                        className={`font-medium ${
+                          isGoalEvent
+                            ? "text-green-800"
+                            : isKeyEvent
+                            ? "text-yellow-800"
+                            : "text-gray-800"
+                        }`}
+                      >
                         {commentaryText}
                       </p>
                     </li>
@@ -978,10 +1085,10 @@ export const MatchPage = () => {
         ) : (
           <div className="text-center py-8 text-gray-500 bg-gray-50 rounded-lg">
             <div className="text-6xl mb-4">⚽</div>
-            <p className="text-lg font-medium">No match commentary yet</p>
+            <p className="text-lg font-medium">No match events yet</p>
             <p className="text-sm mt-2">
-              Click "Simulate Match" to watch a full match with AI-powered
-              commentary!
+              Click "Simulate Match" to watch live match events and real-time
+              analysis!
             </p>
           </div>
         )}

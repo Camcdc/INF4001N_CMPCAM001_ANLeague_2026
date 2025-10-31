@@ -48,9 +48,6 @@ export const TeamPage = () => {
           <h1 className="text-4xl font-extrabold mb-1 tracking-tight">
             {team.federationID}
           </h1>
-          <p className="text-[#A9C6FF] text-lg font-medium">
-            Managed by {team.manager}
-          </p>
         </div>
 
         {/* NAVIGATION BAR */}

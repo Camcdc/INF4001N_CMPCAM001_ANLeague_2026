@@ -75,7 +75,7 @@ MANDATORY RULES:
 - Total goals can be anywhere from 0-7 goals combined (make it realistic but varied)
 - Either team can win, lose, or draw - BE COMPLETELY UNPREDICTABLE
 - Score possibilities: 0-0, 1-0, 2-1, 3-2, 1-3, 0-2, 4-1, etc. - ANY realistic combination
-- Generate 20-35 events spread throughout the FULL 90 minutes (1-90)
+- Generate 30-40 events spread throughout the FULL 90 minutes (1-90)
 - Event types: "goal", "yellow_card", "red_card", "substitution", "commentary"
 - Include LOTS of "commentary" events for regular match action
 - Events must be in chronological order by minute
@@ -232,27 +232,110 @@ Return ONLY the JSON, no other text.`;
       goalIndex++;
     }
 
-    // Add some random commentary events
-    const commentaryMinutes = [8, 15, 25, 35, 45, 55, 65, 75, 85];
-    for (const minute of commentaryMinutes) {
-      if (!goalMinutes.includes(minute)) {
-        const randomTeam = Math.random() < 0.5 ? team1Name : team2Name;
-        const actions = [
-          "creates a good chance but the shot goes wide",
-          "has a corner kick cleared by the defense",
-          "makes a great save to keep the score level",
-          "wins a free kick in a dangerous position",
-          "almost scores with a header from the cross",
-        ];
+    // Generate AI commentary events - expanded for richer match experience
+    const commentaryMinutes = [
+      3, 8, 12, 15, 18, 22, 25, 28, 32, 35, 38, 42, 45, 48, 52, 55, 58, 62, 65,
+      68, 72, 75, 78, 82, 85, 88,
+    ];
+    const availableMinutes = commentaryMinutes.filter(
+      (minute) => !goalMinutes.includes(minute)
+    );
+
+    for (const minute of availableMinutes) {
+      const randomTeam = Math.random() < 0.5 ? team1Name : team2Name;
+
+      try {
+        // Individual AI calls with simpler prompts
+        const commentaryPrompt = `Create one realistic football commentary line for minute ${minute}. Team focus: ${randomTeam}. Match: ${team1Name} vs ${team2Name}. Score: ${currentTeam1Goals}-${currentTeam2Goals}. Just return the commentary text, nothing else.`;
+
+        const commentaryResult = await model.generateContent(commentaryPrompt);
+        const commentaryResponse = await commentaryResult.response;
+        const commentaryText = commentaryResponse
+          .text()
+          .trim()
+          .replace(/['"]/g, "");
 
         events.push({
           minute: minute,
           type: "commentary",
           team: randomTeam,
           player: "",
-          description: `${randomTeam} ${
-            actions[Math.floor(Math.random() * actions.length)]
-          }`,
+          description: commentaryText,
+        });
+
+        // Small delay to avoid API rate limits
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      } catch (error) {
+        console.warn(
+          `AI commentary failed for minute ${minute}, using dynamic fallback`
+        );
+
+        // Enhanced dynamic fallback with more variety and build-up moments
+        const buildUpActions = [
+          "builds a promising attack",
+          "wins the ball in midfield",
+          "creates space on the wing",
+          "makes a crucial interception",
+          "pushes forward with pace",
+          "attempts a through ball",
+          "defends solidly at the back",
+          "earns a throw-in",
+          "breaks up the opposition play",
+          "looks for an opening",
+          "maintains possession well",
+          "presses high up the pitch",
+          "wins an important header",
+          "keeps the pressure on",
+          "launches a quick counter-attack",
+          "works the ball down the flank",
+          "makes a driving run forward",
+          "switches play to the opposite wing",
+          "wins a free kick",
+          "puts in a dangerous cross",
+          "makes a last-ditch tackle",
+          "forces a save from the keeper",
+          "nearly breaks through the defense",
+          "creates a half-chance",
+          "shows good link-up play",
+        ];
+
+        const buildUpOutcomes = [
+          "but the attack fizzles out",
+          "and finds a teammate",
+          "but loses possession",
+          "to start a counter attack",
+          "and maintains control",
+          "but it's blocked",
+          "and clears the danger",
+          "in a dangerous area",
+          "and forces a corner",
+          "down the flanks",
+          "in the center",
+          "with good movement",
+          "but the final ball is overhit",
+          "only to see the shot go wide",
+          "but the keeper makes the save",
+          "creating a moment of panic",
+          "and wins applause from the crowd",
+          "putting the defense under pressure",
+          "but the offside flag goes up",
+          "leading to a scramble in the box",
+          "but can't find the finishing touch",
+          "keeping the tempo high",
+          "drawing a foul from the opponent",
+        ];
+
+        const action =
+          buildUpActions[Math.floor(Math.random() * buildUpActions.length)];
+        const outcome =
+          buildUpOutcomes[Math.floor(Math.random() * buildUpOutcomes.length)];
+
+        events.push({
+          minute: minute,
+          type: "commentary",
+          team: randomTeam,
+          player: "",
+          description: `${randomTeam} ${action} ${outcome}`,
         });
       }
     }

@@ -44,7 +44,9 @@ export const Navbar = () => {
           Fixtures
         </Link>
         &nbsp;|&nbsp;
-        <Link className="font-semibold hover:text-blue-500">Players</Link>
+        <Link className="font-semibold hover:text-blue-500" to="/teams">
+          Teams
+        </Link>
         &nbsp;|&nbsp;
         <Link className="font-semibold hover:text-blue-500">News</Link>
       </div>

@@ -10,6 +10,7 @@ import { Team } from "./pages/myTeam";
 import { Register } from "./pages/register";
 import { RegisterTeam } from "./pages/register-team";
 import { TeamPage } from "./pages/teamPage";
+import { Teams } from "./pages/teams";
 import { TournamentPage } from "./pages/tournament-page";
 
 function App() {
@@ -24,6 +25,7 @@ function App() {
           <Route path="/register" element={<Register />} />
           <Route path="/register-team" element={<RegisterTeam />} />
           <Route path="/myTeam" element={<Team />} />
+          <Route path="/teams" element={<Teams />} />
           <Route path="/fixtures" element={<Fixtures />} />
           <Route path="/all-tournaments" element={<CreateTournaments />} />
           <Route path="/allTournaments" element={<CreateTournaments />} />
